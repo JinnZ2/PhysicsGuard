@@ -5,106 +5,124 @@
 PhysicsGuard is a physics-grounded logic verification system that detects corrupted or adversarial premises by translating natural language claims into physical constraint equations and checking them against conservation laws. If the math doesn't close, the premise is flagged.
 
 - **License**: CC0 1.0 Universal (Public Domain)
-- **Language**: Python 3 (standard library only — no external dependencies)
-- **Status**: Specification/design phase — all module code is currently in `README.md`, not yet extracted into separate files
+- **Language**: Python 3.9+ (standard library only — no external dependencies)
+- **Repository**: github.com/JinnZ2/PhysicsGuard
 
 ## Repository Structure
 
 ```
 PhysicsGuard/
-├── README.md              # Full specification with embedded source code for all modules
-├── LICENSE                # CC0 1.0 Universal
-└── CLAUDE.md              # This file
+├── main.py                        # Entry point — run(premise) orchestrates the pipeline
+├── core/
+│   ├── premise_parser.py          # NLP claim extraction: type, direction, magnitude, keywords
+│   ├── constraint_mapper.py       # Maps parsed claims → physical constraint equations
+│   ├── conservation_checker.py    # Validates constraints against conservation laws
+│   ├── flag_engine.py             # Contradiction scoring, audit trails, verdicts
+│   ├── contrapositive_tester.py   # Four-corner semantic validation
+│   └── conditional_verdict.py     # Scope-conditional verdict layer (v1.1)
+├── domains/
+│   └── organizational.py          # Org structure constraint checking (v2)
+├── tests/
+│   ├── test_premises.py           # Core pipeline tests (parametrized)
+│   └── test_organizational.py     # Organizational module tests
+├── pyproject.toml                 # Project metadata, pytest/ruff/mypy config
+├── README.md                      # Full specification and design document
+├── LICENSE                        # CC0 1.0 Universal
+└── .gitignore
 ```
 
-### Planned Module Layout (defined in README.md)
+## Commands
 
-```
-core/
-├── premise_parser.py        # Extract claims as symbolic logic from natural language
-├── constraint_mapper.py     # Translate claims to physical constraint equations
-├── conservation_checker.py  # Validate constraints against conservation laws
-├── flag_engine.py           # Contradiction scoring, audit trails, verdicts
-├── contrapositive_tester.py # Four-corner semantic validation
-└── conditional_verdict.py   # Scope-conditional verdict layer (v1.1)
-domains/
-├── thermodynamic.py         # Energy/heat/entropy checks
-├── mass_balance.py          # Resource flow accounting
-├── geometric.py             # Spatial constraint verification
-└── organizational.py        # Organizational structure constraint checking (v2)
-tests/
-└── test_premises.py         # Test suite
-main.py                      # Single command entry point
+```bash
+# Run a single premise check
+python main.py "Energy can be created from nothing"
+
+# Interactive mode
+python main.py
+
+# Run tests
+pytest tests/ -v
+
+# Lint
+ruff check .
+
+# Auto-fix lint issues
+ruff check --fix .
 ```
 
 ## Architecture
 
-The processing pipeline follows four stages:
+### Core Pipeline (4 stages)
 
-1. **Premise Parser** — Extracts claim type (thermodynamic/mass_balance/unknown), direction, magnitude, negation count, and keywords from natural language input
-2. **Constraint Mapper** — Translates parsed claims into physical constraint equations (First Law, Second Law, mass conservation, or generic balance)
-3. **Conservation Checker** — Validates each constraint; calculates delta between LHS and RHS; determines pass/fail based on tolerance and corruption flags
-4. **Flag Engine** — Scores contradictions (0.0–1.0) and produces verdicts
+```
+premise (str) → parse_premise() → map_to_constraints() → check_conservation() → score_and_flag() → verdict (dict)
+```
+
+1. **Premise Parser** (`core/premise_parser.py`) — Extracts claim type (`thermodynamic`/`mass_balance`/`unknown`), direction, magnitude, negation count, keywords, and negated keywords using stem matching
+2. **Constraint Mapper** (`core/constraint_mapper.py`) — Translates parsed claims into constraint dicts with `{law, lhs, rhs, tolerance, corrupted}`. Handles First Law, Second Law (with negation-aware entropy detection), mass conservation, and generic balance
+3. **Conservation Checker** (`core/conservation_checker.py`) — Validates each constraint: `passed = (delta <= tolerance) and not corrupted`
+4. **Flag Engine** (`core/flag_engine.py`) — Scores: `failed_count / total`. Produces verdict with full audit trail and fix hints
 
 ### Verdict System
 
-| Verdict     | Score       | Meaning                      |
-|-------------|-------------|------------------------------|
-| `CLEAN`     | 0.0         | No violations detected       |
-| `SUSPECT`   | < 0.5       | Partial contradiction        |
-| `CORRUPTED` | >= 0.5      | Premise fails physics        |
+| Verdict     | Score    | Meaning                |
+|-------------|----------|------------------------|
+| `CLEAN`     | 0.0      | No violations          |
+| `SUSPECT`   | < 0.5    | Partial contradiction  |
+| `CORRUPTED` | >= 0.5   | Premise fails physics  |
 
 ### Extended Modules
 
-- **Contrapositive Tester** — Tests claim, negation, opposite, and opposite-negation (four corners) to surface scope boundaries
-- **Conditional Verdict (v1.1)** — Replaces binary verdicts with scope-conditional truth boundaries using `ScopeCondition` dataclasses and predefined scope libraries (hierarchy, distributed, patriarchy, nomadic egalitarian)
-- **Organizational Module (v2)** — Checks organizational structure claims against resilience physics, enforcement energy cost, adaptive capacity, and cascade failure risk using configurable thresholds
+- **Contrapositive Tester** (`core/contrapositive_tester.py`) — Tests claim, negation, opposite, and opposite-negation (four corners) to surface scope boundaries
+- **Conditional Verdict v1.1** (`core/conditional_verdict.py`) — Scope-conditional truth boundaries using `ScopeCondition` dataclasses. Predefined scope libraries: `hierarchy_works`, `distributed_works`, `patriarchy_works`, `nomadic_egalitarian_works`
+- **Organizational Module v2** (`domains/organizational.py`) — Checks `OrgClaim` dataclass against 5 constraints: resilience, enforcement cost, adaptive slack, cascade risk, justification validity
 
-## Commands
+### Key Data Shapes
 
-### Run
-
-```bash
-python main.py "Energy can be created from nothing"
+**Constraint dict** (internal):
+```python
+{"law": str, "lhs": float, "rhs": float, "tolerance": float, "corrupted": bool}
 ```
 
-Or interactive mode:
-```bash
-python main.py
+**Verdict dict** (returned by `run()`):
+```python
+{"verdict": str, "score": float, "flags": list[str], "reason": str, "details": list, "audit": dict|None}
 ```
 
-### Test
-
-```bash
-python tests/test_premises.py
+**OrgConstraintResult** (dataclass, returned by `check_organization()`):
+```python
+OrgConstraintResult(claim, resilience_score, enforcement_waste, cascade_risk, verdict, flags, audit)
 ```
 
-## Key Conventions
+## Code Conventions
 
-- **No external dependencies** — Uses only Python standard library (`sys`, `re`, `dataclasses`, `typing`)
-- **Snake_case** throughout for functions and variables
-- **4-space indentation**
-- **Dict-based return values** for core pipeline functions; `@dataclass` for domain modules (v2)
-- **Threshold constants** are defined at module level with descriptive names (e.g., `PHI_RESILIENCE_THRESHOLD = 0.62`)
-- Each constraint is a dict with keys: `law`, `lhs`, `rhs`, `tolerance`, `corrupted`
-- Each check result includes: `law`, `passed`, `delta`, `corrupted`, `detail`
-- Verdicts include audit trails with fix hints
+- **No external dependencies** — stdlib only (`sys`, `re`, `dataclasses`, `typing`)
+- **snake_case** for all functions and variables
+- **Compact single-line if/elif/else** is the project style (E701 ignored in ruff config)
+- **Dict returns** for core pipeline; **`@dataclass`** for domain modules
+- **Threshold constants** at module level with descriptive names (e.g., `PHI_RESILIENCE_THRESHOLD = 0.62`)
+- **Stem matching** for keyword extraction — `"created"` matches keyword `"create"`, `"extracting"` matches `"extract"`
+- **Negation-aware** keyword tracking — `negated_kw` field in parsed claims detects words like "no", "without" preceding keywords within 3-word window
 
-## Test Cases
+## Tooling Configuration
 
-Expected behavior for the core test suite:
+Defined in `pyproject.toml`:
+- **pytest**: test discovery in `tests/`
+- **ruff**: Python 3.9 target, 120 char line length, E/F/W/I rules (E701 ignored)
+- **mypy**: Python 3.9, warns on `Any` returns
 
-| Premise | Expected Verdict |
-|---------|-----------------|
-| "Energy can be created from nothing without any heat loss" | CORRUPTED |
-| "Extracting resources produces output with no entropy cost" | CORRUPTED |
-| "Heat transfer moves energy from hot to cold regions" | CLEAN |
-| "Mass cannot be destroyed in a closed system" | CLEAN |
-| "You can generate infinite power without consuming anything" | CORRUPTED |
+## Organizational Module Thresholds
 
-## Development Notes
+| Constant                    | Value | Meaning                                         |
+|-----------------------------|-------|-------------------------------------------------|
+| `PHI_RESILIENCE_THRESHOLD`  | 0.62  | Minimum resilience score (from Urban Resilience) |
+| `MAX_ENFORCEMENT_RATIO`     | 0.30  | >30% resources on enforcement = parasitic        |
+| `MIN_ADAPTIVE_SLACK`        | 0.15  | <15% slack = brittle                             |
+| `MAX_INTERDEPENDENCY_LOAD`  | 0.75  | >75% single-point deps = cascade risk            |
 
-- The README serves as the canonical specification — all module code is embedded there
-- When implementing modules as separate files, extract code directly from README.md sections (each section is prefixed with a comment like `# physicsguard/core/premise_parser.py`)
-- The `flag_engine.py` has two versions in the README: a simple v1 and an enhanced version with audit trails — use the enhanced version
-- The organizational module uses four constraint thresholds: resilience (0.62 phi), enforcement (30%), adaptive slack (15%), interdependency load (75%)
+## Known Design Decisions
+
+- The README contains the original specification with inline code. The actual `.py` files are the canonical source of truth
+- Keyword matching uses stem prefix comparison (not regex or NLP), keeping it dependency-free but imprecise on edge cases
+- The `negated_kw` feature uses a 3-word lookahead window from negation words — covers common patterns like "no entropy cost" and "without any heat loss"
+- Domain modules (`domains/`) are separate from core — new physics domains can be added without touching the core pipeline
