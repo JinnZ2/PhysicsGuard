@@ -120,10 +120,26 @@ def parse_premise(premise: str) -> dict:
     keywords = _extract_keywords(words)
     negated_kw = _find_negated_keywords(words, keywords)
 
+    # Vector similarity analysis
+    from core.vectorizer import match_premise
+    vector_match = match_premise(premise)
+
+    # If regex found no specific pattern, use vector match as fallback
+    if claim_pattern == "generic" and vector_match.similarity > 0.2:
+        claim_pattern = vector_match.best_category
+
     cost_words = {"cost", "loss", "entropy", "heat", "waste", "input", "dissipation"}
     cost_kw_in_text = cost_words & set(words)
     cost_mentioned = len(cost_kw_in_text) > 0
     cost_negated = any(k in negated_kw or _stem_in_set(k, negated_kw) for k in cost_kw_in_text)
+
+    is_impossibility = claim_pattern in {
+        "creation_from_nothing", "infinite_claim", "perpetual_motion",
+        "perfect_efficiency", "entropy_reversal", "information_violation",
+    }
+    # Vector match can also flag impossibility when regex misses it
+    if not is_impossibility and vector_match.is_likely_violation and vector_match.similarity > 0.3:
+        is_impossibility = True
 
     return {
         "raw": premise,
@@ -135,13 +151,11 @@ def parse_premise(premise: str) -> dict:
         "keywords": keywords,
         "negated_kw": negated_kw,
         "is_conservation_statement": claim_pattern == "conservation_statement",
-        "is_impossibility_claim": claim_pattern in {
-            "creation_from_nothing", "infinite_claim", "perpetual_motion",
-            "perfect_efficiency", "entropy_reversal",
-        },
+        "is_impossibility_claim": is_impossibility,
         "subject": _extract_subject(pattern_match, premise),
         "cost_mentioned": cost_mentioned,
         "cost_negated": cost_negated or (cost_mentioned and _cost_is_denied(p)),
+        "vector_match": vector_match.to_dict(),
     }
 
 

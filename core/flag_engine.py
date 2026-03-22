@@ -50,6 +50,7 @@ class Verdict:
             ],
             "applicable_laws": self.applicable_laws,
             "confidence": self.confidence,
+            "vector_match": self.audit.get("vector_match") if isinstance(self.audit, dict) else None,
             "audit": self.audit,
         }
 
@@ -119,20 +120,36 @@ def _compute_confidence(parsed, results):
     """
     How confident are we in this verdict?
 
-    High confidence: specific claim pattern matched, clear violation
-    Low confidence: generic pattern, ambiguous claim
+    Combines pattern specificity with vector similarity for robust confidence.
+    High confidence: specific claim pattern + high vector similarity
+    Low confidence: generic pattern, ambiguous claim, low similarity
     """
     if not parsed:
         return 0.5
 
     pattern = parsed.get("claim_pattern", "generic")
+
+    # Base confidence from pattern type
     if pattern == "generic":
-        return 0.4  # low confidence — couldn't identify claim structure
-    if pattern in ("conservation_statement", "transfer_claim"):
-        return 0.8  # high — well-understood physics
-    if pattern in ("creation_from_nothing", "perpetual_motion", "infinite_claim"):
-        return 0.95  # very high — clear physics violation
-    return 0.7  # moderate confidence for other patterns
+        base = 0.4
+    elif pattern in ("conservation_statement", "transfer_claim"):
+        base = 0.8
+    elif pattern in ("creation_from_nothing", "perpetual_motion", "infinite_claim"):
+        base = 0.95
+    else:
+        base = 0.7
+
+    # Boost or penalize based on vector similarity
+    vm = parsed.get("vector_match")
+    if vm:
+        sim = vm.get("similarity", 0.0)
+        # Vector agreement boosts confidence; disagreement reduces it
+        if sim > 0.3:
+            base = min(base + 0.1, 0.99)
+        elif sim < 0.1 and base > 0.5:
+            base = max(base - 0.15, 0.3)
+
+    return base
 
 
 def _summarize(violations, status, score):
@@ -174,6 +191,7 @@ def _build_audit(parsed, constraints, results, status, score):
         "score": score,
         "claim_pattern": parsed.get("claim_pattern", "generic"),
         "confidence": _compute_confidence(parsed, results),
+        "vector_match": parsed.get("vector_match"),
         "chain": trail,
         "summary": _summarize(
             [Violation(t["law"], t["detail"], "", "", t["severity"], "")

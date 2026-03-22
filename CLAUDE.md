@@ -18,15 +18,17 @@ PhysicsGuard/
 │   ├── constraint_mapper.py       # Maps claims → real conservation equations
 │   ├── conservation_checker.py    # Validates constraints with actual delta math
 │   ├── flag_engine.py             # Severity-weighted scoring, Verdict/Violation dataclasses
+│   ├── vectorizer.py              # TF-IDF vectors + cosine similarity reference matching
 │   ├── contrapositive_tester.py   # Four-corner semantic validation
 │   └── conditional_verdict.py     # Scope-conditional verdict layer (v1.1)
 ├── domains/
 │   ├── organizational.py          # Org structure constraint checking (v2)
 │   └── information.py             # Information conservation (Landauer, Shannon, NFL)
 ├── tests/
-│   ├── test_premises.py           # Core pipeline tests (42 cases)
-│   ├── test_organizational.py     # Organizational module tests
-│   └── test_information.py        # Information conservation tests
+│   ├── test_premises.py           # Core pipeline tests (30 cases)
+│   ├── test_vectorizer.py         # Vector similarity tests (13 cases)
+│   ├── test_organizational.py     # Organizational module tests (6 cases)
+│   └── test_information.py        # Information conservation tests (4 cases)
 ├── pyproject.toml                 # Project metadata, pytest/ruff/mypy config
 ├── README.md                      # Original specification document
 ├── PLAN.md                        # Architecture evolution plan
@@ -122,8 +124,30 @@ Computes actual deltas and severity scores:
 Severity-weighted scoring (not simple counting):
 - Score = average severity across all constraints
 - Structured `Verdict` and `Violation` dataclasses
-- Confidence score based on claim pattern specificity
+- Confidence score based on claim pattern specificity + vector similarity
 - Full audit trail with fix hints
+
+### 5. Vector Similarity (`core/vectorizer.py`)
+
+TF-IDF vectorizer with cosine similarity against a reference library of ~60 known physics violations and valid claims. Uses word unigrams + bigrams + trigrams for phrase-level matching. Zero external dependencies.
+
+**Role in pipeline**: Integrated into `premise_parser.py` as:
+- **Fallback**: When regex patterns return `"generic"`, vector match provides the claim category
+- **Impossibility detection**: High similarity to violation references flags claims even without regex match
+- **Confidence boost/penalty**: Vector agreement with regex result increases confidence; disagreement decreases it
+
+**Reference library categories**: `creation_from_nothing`, `output_without_cost`, `perfect_efficiency`, `entropy_reversal`, `infinite_claim`, `perpetual_motion`, `information_violation`, `conservation_statement`, `transfer_claim`
+
+**API**:
+```python
+from core.vectorizer import match_premise
+result = match_premise("power emerges from the void")
+result.best_label       # "violation"
+result.best_category    # "creation_from_nothing"
+result.similarity       # 0.72
+result.violation_score  # 0.65
+result.valid_score      # 0.08
+```
 
 ### Verdict System
 
@@ -189,7 +213,7 @@ Checks `InfoClaim` dataclass against 4 laws:
 
 ## Code Conventions
 
-- **No external dependencies** — stdlib only (`sys`, `re`, `math`, `json`, `dataclasses`, `typing`, `argparse`)
+- **No external dependencies** — stdlib only (`sys`, `re`, `math`, `json`, `collections`, `dataclasses`, `typing`, `argparse`)
 - **snake_case** for all functions and variables
 - **Compact single-line if/elif/else** is the project style (E701 ignored in ruff)
 - **Pattern-first design** — claim patterns drive constraint generation, not keywords
@@ -200,15 +224,16 @@ Checks `InfoClaim` dataclass against 4 laws:
 ## Tooling
 
 Defined in `pyproject.toml`:
-- **pytest**: test discovery in `tests/`, 42 tests
+- **pytest**: test discovery in `tests/`, 55 tests
 - **ruff**: Python 3.9 target, 120 char lines, E/F/W/I rules (E701 ignored)
 - **mypy**: Python 3.9, warns on `Any` returns
 
 ## Testing
 
 ```bash
-pytest tests/ -v          # all 42 tests
+pytest tests/ -v                      # all 55 tests
 pytest tests/test_premises.py -v      # core pipeline (30 tests)
+pytest tests/test_vectorizer.py -v    # vector similarity (13 tests)
 pytest tests/test_organizational.py   # org module (6 tests)
 pytest tests/test_information.py      # info module (4 tests)
 ```
