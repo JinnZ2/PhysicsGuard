@@ -90,6 +90,71 @@ CLAIM_PATTERNS = [
 
 NEGATION_WORDS = {"not", "no", "never", "without", "cannot", "can't", "doesn't", "isn't", "won't"}
 
+# -- Dismissal detection -------------------------------------------------------
+# These patterns detect when a speaker is *denying* a violation exists,
+# which makes the claim valid physics (e.g., "You cannot get something from nothing").
+
+DISMISSAL_PATTERNS = [
+    # "X cannot/can't be created from nothing" — negated creation
+    re.compile(
+        r"\b(can\s*(?:not|\'t)|cannot|impossible|never|no\s+way)\b"
+        r".*?\b(creat|generat|produc|made|emerg|get)\w*"
+        r".*?\b(from\s+nothing|out\s+of\s+nothing|from\s+nowhere|something\s+from\s+nothing)",
+        re.IGNORECASE,
+    ),
+    # "X is never created from nothing" — passive negation
+    re.compile(
+        r"\b(\w+)\s+(?:is|are)\s+never\s+(creat|generat|produc|made)\w*"
+        r".*?\b(from\s+nothing|out\s+of\s+nothing|from\s+nowhere)",
+        re.IGNORECASE,
+    ),
+    # "impossible to build/make a perpetual motion / free energy"
+    re.compile(
+        r"\b(impossible|cannot|can\s*(?:not|\'t)|never|no\s+way)\b"
+        r".*?\b(perpetual\s+motion|free\s+energy|over[\s-]?unity)",
+        re.IGNORECASE,
+    ),
+    # "no such thing as free energy / perpetual motion"
+    re.compile(
+        r"\bno\s+such\s+thing\s+as\b"
+        r".*?\b(perpetual\s+motion|free\s+energy|something\s+from\s+nothing"
+        r"|infinite\s+energy|100\s*%\s*efficien|perfect\s+efficien)",
+        re.IGNORECASE,
+    ),
+    # "no machine can be 100% efficient / perfectly efficient"
+    re.compile(
+        r"\b(no|cannot|can\s*(?:not|\'t)|impossible|never)\b"
+        r".*?\b(100\s*%\s*efficien|perfect(?:ly)?\s+efficien|lossless\s+conver)",
+        re.IGNORECASE,
+    ),
+    # "X never/cannot decrease without work" — denying entropy reversal
+    re.compile(
+        r"\b(cannot|can\s*(?:not|\'t)|never|impossible|does\s*(?:not|n\'t))\b"
+        r".*?\b(entropy|disorder)\s*(decreas|reduc|revers)\w*"
+        r".*?\b(without|with\s+no)",
+        re.IGNORECASE,
+    ),
+    # "you cannot get something from nothing"
+    re.compile(
+        r"\b(cannot|can\s*(?:not|\'t)|impossible|never)\b"
+        r".*?\bget\s+something\s+from\s+nothing",
+        re.IGNORECASE,
+    ),
+]
+
+
+def _is_dismissal(premise):
+    """
+    Check if the premise is dismissing/denying a physics violation.
+
+    Returns True if the premise is saying the violation is impossible,
+    which makes it a valid physics statement.
+    """
+    for pat in DISMISSAL_PATTERNS:
+        if pat.search(premise):
+            return True
+    return False
+
 
 def _tokenize(text):
     """Split text into lowercase word tokens."""
@@ -120,12 +185,22 @@ def parse_premise(premise: str) -> dict:
     keywords = _extract_keywords(words)
     negated_kw = _find_negated_keywords(words, keywords)
 
+    # Dismissal detection: "You cannot get something from nothing" is valid physics
+    # Must run BEFORE vector fallback so dismissed violations become conservation_statement
+    dismissal = _is_dismissal(premise)
+    if dismissal and claim_pattern in (
+        "creation_from_nothing", "infinite_claim", "perpetual_motion",
+        "perfect_efficiency", "entropy_reversal", "output_without_cost",
+    ):
+        claim_pattern = "conservation_statement"
+
     # Vector similarity analysis
     from core.vectorizer import match_premise
     vector_match = match_premise(premise)
 
     # If regex found no specific pattern, use vector match as fallback
-    if claim_pattern == "generic" and vector_match.similarity > 0.2:
+    # But not if the premise is a dismissal — trust the dismissal detection
+    if claim_pattern == "generic" and vector_match.similarity > 0.2 and not dismissal:
         claim_pattern = vector_match.best_category
 
     cost_words = {"cost", "loss", "entropy", "heat", "waste", "input", "dissipation"}
@@ -138,7 +213,8 @@ def parse_premise(premise: str) -> dict:
         "perfect_efficiency", "entropy_reversal", "information_violation",
     }
     # Vector match can also flag impossibility when regex misses it
-    if not is_impossibility and vector_match.is_likely_violation and vector_match.similarity > 0.3:
+    # But never override a dismissal
+    if not is_impossibility and not dismissal and vector_match.is_likely_violation and vector_match.similarity > 0.3:
         is_impossibility = True
 
     return {
@@ -152,6 +228,7 @@ def parse_premise(premise: str) -> dict:
         "negated_kw": negated_kw,
         "is_conservation_statement": claim_pattern == "conservation_statement",
         "is_impossibility_claim": is_impossibility,
+        "is_dismissal": dismissal,
         "subject": _extract_subject(pattern_match, premise),
         "cost_mentioned": cost_mentioned,
         "cost_negated": cost_negated or (cost_mentioned and _cost_is_denied(p)),

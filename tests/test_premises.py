@@ -164,6 +164,56 @@ def test_adversarial_cases(premise, should_not_be):
     )
 
 
+# -- Negation / dismissal tests -----------------------------------------------
+# When someone says a violation is *impossible*, that's valid physics, not a violation.
+
+@pytest.mark.parametrize("premise", [
+    "Mass is never created from nothing",
+    "You cannot get something from nothing",
+    "It is impossible to build a perpetual motion machine",
+    "There is no such thing as free energy",
+    "No machine can be 100% efficient",
+    "Energy cannot be created or destroyed",
+])
+def test_dismissed_violations_are_clean(premise):
+    """Premises that deny violations exist should be CLEAN."""
+    result = check(premise)
+    assert result["verdict"] == "CLEAN", (
+        f"Dismissed violation should be CLEAN: {premise!r}, "
+        f"got {result['verdict']} (pattern={result['audit'].get('claim_pattern', '?')})"
+    )
+
+
+@pytest.mark.parametrize("premise", [
+    "Energy can be created from nothing",
+    "Perpetual motion machine runs forever",
+    "Free energy device produces electricity from nothing",
+    "Entropy decreases without any work input",
+    "This machine needs no input energy",
+])
+def test_actual_violations_still_corrupted(premise):
+    """Violations without dismissal framing should still be CORRUPTED."""
+    result = check(premise)
+    assert result["verdict"] == "CORRUPTED", (
+        f"Violation should be CORRUPTED: {premise!r}, "
+        f"got {result['verdict']} (pattern={result['audit'].get('claim_pattern', '?')})"
+    )
+
+
+def test_dismissal_flag_set():
+    """Parser should set is_dismissal=True for dismissed violations."""
+    from core.premise_parser import parse_premise
+    parsed = parse_premise("You cannot get something from nothing")
+    assert parsed["is_dismissal"] is True
+
+
+def test_dismissal_flag_not_set_for_violations():
+    """Parser should set is_dismissal=False for actual violations."""
+    from core.premise_parser import parse_premise
+    parsed = parse_premise("Energy can be created from nothing")
+    assert parsed["is_dismissal"] is False
+
+
 def test_empty_premise():
     result = check("")
     assert result["verdict"] in ("CLEAN", "SUSPECT", "CORRUPTED")
