@@ -167,6 +167,14 @@ REFERENCE_LIBRARY = [
     ("resources generated from thin air", "violation", "creation_from_nothing"),
     ("destroy mass completely", "violation", "creation_from_nothing"),
 
+    # -- Extraction-without-return violations (TAF-style energy accounting) --
+    ("extract energy from workers without compensation", "violation", "energy_extraction_without_return"),
+    ("drain resources from the land without replenishing", "violation", "energy_extraction_without_return"),
+    ("takes from the commons and gives nothing back", "violation", "energy_extraction_without_return"),
+    ("siphon value from labor without reinvestment", "violation", "energy_extraction_without_return"),
+    ("mine the soil with no nutrient return", "violation", "energy_extraction_without_return"),
+    ("indefinite extraction with no replenishment flow", "violation", "energy_extraction_without_return"),
+
     # -- Information violations --
     ("learn without any training data", "violation", "information_violation"),
     ("knowledge from nothing", "violation", "information_violation"),

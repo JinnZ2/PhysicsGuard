@@ -6,17 +6,27 @@ Checks social/organizational structure claims against:
 - Adaptive capacity (slack vs rigidity)
 - Cascade failure risk (interdependency load)
 CC0 — github.com/JinnZ2/physicsguard
+
+References:
+  Urban Resilience Simulator — phi resilience threshold (0.62).
+  Thermodynamic Accountability Framework (JinnZ2/thermodynamic-accountability-framework)
+    — parasitic enforcement, friction ratio, and collapse-threshold semantics
+    reinforce the thresholds below. See domains/thermodynamic_accountability.py
+    for the energy-balance equations that these ratios approximate.
 """
 
 from dataclasses import dataclass
 from typing import List
 
 # -- Constraint Thresholds -----------------------------------------------------
+# Organizational ratios are unitless proxies for thermodynamic quantities
+# computed in domains/thermodynamic_accountability.py. A system failing here
+# will generally also fail the energy-balance check there.
 
-PHI_RESILIENCE_THRESHOLD    = 0.62   # from Urban Resilience Simulator
-MAX_ENFORCEMENT_RATIO       = 0.30   # >30% resources spent on enforcement = parasitic
-MIN_ADAPTIVE_SLACK          = 0.15   # <15% slack = brittle
-MAX_INTERDEPENDENCY_LOAD    = 0.75   # >75% single-point dependency = cascade risk
+PHI_RESILIENCE_THRESHOLD    = 0.62   # Urban Resilience Simulator
+MAX_ENFORCEMENT_RATIO       = 0.30   # TAF: >30% enforcement → parasitic friction regime
+MIN_ADAPTIVE_SLACK          = 0.15   # TAF: <15% slack → distance_to_collapse < 0 under load
+MAX_INTERDEPENDENCY_LOAD    = 0.75   # TAF: >75% single-point deps → cascade geometry
 
 # -- Data Structures -----------------------------------------------------------
 

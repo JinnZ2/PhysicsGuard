@@ -150,6 +150,23 @@ def _from_claim_pattern(parsed, pattern):
             },
         ]
 
+    if pattern == "energy_extraction_without_return":
+        # First-law accounting at the source boundary: outflow is positive
+        # but return/replenishment inflow is explicitly zero. Indefinite
+        # extraction implies the source holds infinite reserves.
+        # (See domains/thermodynamic_accountability.py for the full
+        # energy-balance formulation.)
+        return [{
+            "law": "first_law_thermodynamics",
+            "lhs": 0.0,            # return flow to source: denied
+            "rhs": mag,            # outflow from source: asserted
+            "tolerance": 0.01,
+            "reason": (
+                "Extraction without return flow — source cannot sustain "
+                "indefinite outflow with zero replenishment"
+            ),
+        }]
+
     return None  # no pattern-specific constraints
 
 

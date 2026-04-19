@@ -84,6 +84,25 @@ CLAIM_PATTERNS = [
         re.IGNORECASE,
     ), "entropy_reversal"),
 
+    # "extract/drain/mine/siphon X from Y without returning/replenishing/compensating"
+    # First-law accounting at the source boundary: outflow > 0, return inflow = 0.
+    # Captures the narrative form ("takes from X, gives nothing back") used for
+    # labor-extraction, soil-depletion, and institutional-parasitism claims.
+    (re.compile(
+        r"\b(extract|drain|siphon|mine|harvest|deplet|take|tak(?:es|ing))\w*"
+        r".*?\bfrom\s+\w+"
+        r".*?\b(without|with\s+no|no)\s+\w*\s*"
+        r"(return|reciproc|replenish|compensat|reinvest|giving\s+back|giv\w+\s+back)",
+        re.IGNORECASE,
+    ), "energy_extraction_without_return"),
+
+    # "takes from X and gives nothing back" / "nothing in return"
+    (re.compile(
+        r"\b(takes?|extracts?|drains?|siphons?|harvests?)\s+from\s+\w+"
+        r".*?\b(gives?\s+nothing\s+back|nothing\s+in\s+return|no\s+return\s+flow)",
+        re.IGNORECASE,
+    ), "energy_extraction_without_return"),
+
 ]
 
 # -- Negation-aware word analysis ----------------------------------------------
@@ -191,6 +210,7 @@ def parse_premise(premise: str) -> dict:
     if dismissal and claim_pattern in (
         "creation_from_nothing", "infinite_claim", "perpetual_motion",
         "perfect_efficiency", "entropy_reversal", "output_without_cost",
+        "energy_extraction_without_return",
     ):
         claim_pattern = "conservation_statement"
 
@@ -211,6 +231,7 @@ def parse_premise(premise: str) -> dict:
     is_impossibility = claim_pattern in {
         "creation_from_nothing", "infinite_claim", "perpetual_motion",
         "perfect_efficiency", "entropy_reversal", "information_violation",
+        "energy_extraction_without_return",
     }
     # Vector match can also flag impossibility when regex misses it
     # But never override a dismissal

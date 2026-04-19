@@ -96,6 +96,12 @@ def test_audit_has_claim_pattern():
     ("Mass cannot be destroyed", "conservation_statement"),
     ("Heat transfers from hot to cold", "transfer_claim"),
     ("Perpetual motion is possible", "perpetual_motion"),
+    ("The company extracts value from workers without returning compensation",
+     "energy_extraction_without_return"),
+    ("This system drains nutrients from the soil without replenishing",
+     "energy_extraction_without_return"),
+    ("The platform takes from creators and gives nothing back",
+     "energy_extraction_without_return"),
 ])
 def test_claim_pattern_detection(premise, expected_pattern):
     from core.premise_parser import parse_premise
@@ -104,6 +110,26 @@ def test_claim_pattern_detection(premise, expected_pattern):
         f"Expected pattern {expected_pattern!r} for: {premise!r}, "
         f"got {parsed['claim_pattern']!r}"
     )
+
+
+@pytest.mark.parametrize("premise", [
+    "The company extracts value from workers without returning compensation",
+    "This system drains nutrients from the soil without replenishing them",
+    "The platform takes from creators and gives nothing back",
+    "Labor is siphoned from the community with no reinvestment",
+])
+def test_extraction_without_return_is_corrupted(premise):
+    result = check(premise)
+    assert result["verdict"] == "CORRUPTED", (
+        f"Extraction-without-return should be CORRUPTED: {premise!r}, "
+        f"got {result['verdict']}"
+    )
+    assert "first_law_thermodynamics" in result["flags"]
+
+
+def test_balanced_exchange_is_clean():
+    result = check("Workers produce value and receive fair compensation")
+    assert result["verdict"] == "CLEAN"
 
 
 # -- Real constraint math tests ------------------------------------------------
