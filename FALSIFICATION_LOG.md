@@ -30,7 +30,7 @@ When something is superseded, do not silently overwrite it. Record:
 | **Claim** | What was asserted, in the form it was asserted |
 | **Run** | The concrete input that tested it — reproducible, copy-pasteable |
 | **Result** | What actually came out. Verbatim, not paraphrased |
-| **Status** | `FALSIFIED` / `HOLDS` / `OPEN` |
+| **Status** | `FALSIFIED` / `HOLDS` / `OPEN` / `RESOLVED` (investigated; outcome recorded, no change shipped) |
 | **Edited claim** | What replaced it, or `—` if nothing yet |
 | **Where it went** | Commit, and `legacy/` path if the artifact was preserved |
 
@@ -43,6 +43,9 @@ Rules:
    recorded than tidied away.
 4. **Re-run old entries when the pipeline changes.** A `HOLDS` can become a
    `FALSIFIED` later. That is the point.
+5. **A negative result is a result.** If you investigate and every candidate fix
+   measures worse than doing nothing, that is worth more than a plausible change.
+   Record it and ship nothing — see F-007.
 
 ## Provenance of these entries
 
@@ -168,22 +171,130 @@ them as claims.
   The third example in that commit message was accurate. The first two were not —
   and were **never** accurate, including at the commit that asserted them. This
   is not a later regression; the claim was untested when written.
-- **Status**: **FALSIFIED** (claim), **OPEN** (underlying gap)
-- **Edited claim**: the vectorizer raises recall on *near* paraphrases of
-  reference entries (sim > 0.2), not on arbitrary rephrasings. F-004 is therefore
-  only partially addressed.
-- **Unknowns to search** — untested, do not assume:
-  1. Is 0.2 the right gate? Lowering it to ~0.13 would admit these two cases, but
-     the false-positive cost across the 130-test suite and the 26-case benchmark
-     corpus is **unmeasured**. Do not tune it without running both.
-  2. Is the failure the threshold or the reference library? A 60-entry library
-     over unigram+bigram+trigram TF-IDF may simply be too sparse for these
-     phrasings to score highly against any entry.
-  3. Would a per-category threshold beat one global gate? `transfer_claim` scores
-     0.89 while violation categories cluster far lower — suggesting the reference
-     entries are not density-balanced across categories.
-- **Where it went**: nowhere yet. Recorded, not fixed. The fix would be a
-  behavior change requiring its own hypothesize → run → result cycle.
+- **Status**: **FALSIFIED** (claim), **RESOLVED** (gap — investigated, no fix
+  shipped, see F-007/F-008/F-009)
+- **Edited claim**: the vectorizer raises recall on *near-verbatim paraphrases*
+  of reference entries only. On genuinely novel phrasing it does not fire at all,
+  and **should not be made to** — every operating point that fires on novel
+  violations also fires on arbitrary English. F-004 is therefore not
+  meaningfully addressed by the vectorizer, and cannot be by tuning it.
+- **The three unknowns, resolved**: all three were searched (n=20 held-out probe
+  set + 4 physics-free controls, now committed as
+  `benchmarks/vector_gate_probe.jsonl`). Every variant was tuned to its *own*
+  best operating point before comparison:
+
+  | Variant | Best balanced accuracy | TP | FP | Controls flagged |
+  |---------|----------------------:|---:|---:|-----------------:|
+  | Current (global gate) | 0.75 @ 0.03 | 10/10 | 5/10 | **3/4** |
+  | Drop-OOV terms | 0.70 @ 0.02 | 10/10 | 6/10 | **3/4** |
+  | Violation-minus-valid margin | 0.70 @ 0.05 | 4/10 | 0/10 | 1/4 |
+  | Margin + drop-OOV | 0.80 @ 0.02 | 10/10 | 4/10 | **4/4** |
+  | Per-category thresholds (U3) | 0.75 @ 0.12 | 10/10 | 5/10 | **3/4** |
+
+  Coin flip is 0.50. The best-scoring variant flags **all four** control
+  sentences. `"she walked the dog around the block twice"` scores 0.219 against
+  `creation_from_nothing`; `"the recipe calls for two cups of flour"` scores
+  0.201 against `information_violation`.
+
+  1. **Is 0.2 the right gate?** No threshold is right. The violation and valid
+     distributions overlap almost completely on novel phrasing
+     (violations mean 0.082, valid mean 0.066 under current scoring). At the
+     shipped 0.2 gate, novel-phrasing TPR **and** FPR are both `0.00` — the gate
+     is effectively closed, which is the safest available setting. Every
+     direction tested trades that safety for noise.
+  2. **Threshold or library?** Neither, exactly — see **F-007**. The root cause
+     is a scoring defect, not sparsity. But correcting it does not help.
+  3. **Per-category thresholds?** 0.75 balanced accuracy, identical to the global
+     gate, still 3/4 controls flagged. **FALSIFIED.**
+- **Where it went**: no behavior change. `benchmarks/vector_gate_probe.jsonl` and
+  `tests/test_vector_gate.py` commit the experiment so it is re-runnable and so a
+  future threshold change fails loudly against the controls.
+
+## F-007 — Out-of-vocabulary terms are weighted, and it is a real defect
+
+- **Claim** (mine, while investigating F-006): the low scores in F-006 are caused
+  by out-of-vocabulary n-grams inflating the query vector's magnitude. Removing
+  them will fix detection.
+- **Run**: decomposed query-vector magnitude by vocabulary membership; then
+  re-scored the whole probe set with OOV terms dropped.
+- **Result** — the mechanism is real and worse than expected:
+  - `TfIdfVectorizer.vectorize()` assigns unknown terms
+    `idf = log(N + 1) = 4.127`, which is **higher than the maximum in-vocabulary
+    IDF (4.111)**. Novel terms receive the greatest weight in the space.
+  - An OOV term overlaps **zero** reference vectors by construction (verified:
+    the 587 terms across all reference vectors are a subset of the fitted vocab).
+    It contributes nothing to any dot product but is added to `mag_a`, which
+    *divides* every similarity.
+  - Consequence: cosine similarity is deflated in proportion to how unusual the
+    phrasing is. For `"output appears with no source energy"`, **86.6%** of the
+    query vector's magnitude is dead weight; for
+    `"results emerge without any data input"`, **91.3%**. Library-verbatim
+    strings carry 0%.
+  - So the score is substantially measuring *vocabulary overlap with a 60-entry
+    library*, not semantic match — exactly the failure mode F-001 replaced
+    keyword lists to escape.
+- **Status**: defect **CONFIRMED**; the proposed fix **FALSIFIED**.
+- **Why it was not shipped**: dropping OOV terms raises the F-006 cases 2.0× and
+  2.5× — past the gate, as predicted. It raises the valid claims by the same
+  mechanism. Balanced accuracy goes **down** (0.75 → 0.70) and control
+  sentences stay flagged 3/4. It is a monotone rescaling, not a discrimination
+  improvement. Applying it while leaving the gate at 0.2 would move
+  novel-phrasing FPR from `0.00` to `0.50`.
+- **Edited claim**: this is a genuine implementation defect that miscalibrates
+  the score, and it is *also* not the reason the vectorizer fails. Both are true.
+  Fixing it is only worth doing as part of replacing the scoring approach, not on
+  its own.
+- **Where it went**: recorded, not fixed. Shipping a change that is provably
+  correct in isolation but measurably worse in effect is how a system rots.
+
+## F-008 — "Run the suite before retuning" was a sufficient safety check
+
+- **Claim** (mine, F-006 as originally written): "Do not tune it without running
+  both [the 130-test suite and the 26-case benchmark corpus]."
+- **Run**: instrumented the parser's routing and counted how many labeled cases
+  in the entire repo actually reach the vector gate — i.e. have
+  `claim_pattern == "generic"` and are not dismissals.
+- **Result**: **4 of 41** labeled premise cases reach the gate, and only **3 are
+  distinct**:
+
+  | Similarity | Expected | Input |
+  |-----------:|----------|-------|
+  | 0.512 | CLEAN | Energy is conserved in all physical processes |
+  | 0.574 | CLEAN | Heat flows from hot objects to cold objects |
+  | 0.345 | CORRUPTED | This machine needs no input energy |
+
+  All three sit far above the 0.2 gate. **Nothing in the test suite lies near the
+  decision boundary.** The threshold could be set anywhere in `0.0 – 0.345` and
+  all 130 tests would still pass. Two of the 41 cases are also verbatim reference
+  library entries, so they score 1.000 by construction.
+- **Status**: **FALSIFIED.** Running the suite is necessary but nowhere near
+  sufficient; passing tests would have given false confidence in a bad threshold.
+- **Edited claim**: a threshold change must be evaluated against a corpus built
+  *for* the boundary, with physics-free controls included. That corpus now exists
+  at `benchmarks/vector_gate_probe.jsonl` and is enforced by
+  `tests/test_vector_gate.py`.
+- **Note**: this entry falsifies a prescription written in this very file one
+  commit earlier. That is the loop working, not a lapse — the prescription was
+  plausible, untested, and wrong.
+
+## F-009 — The reference library is balanced across labels
+
+- **Claim**: implicit in the vectorizer's design — `best_label` compares
+  similarity to violation vs valid references, which assumes comparable coverage.
+- **Run**: counted `REFERENCE_LIBRARY` entries by label; scored four physics-free
+  control sentences.
+- **Result**: **41 violation entries vs 20 valid** — roughly 2:1. Three of four
+  control sentences (`"she walked the dog around the block twice"`,
+  `"please submit the quarterly report by friday"`,
+  `"the recipe calls for two cups of flour"`) are labeled `violation`, on nothing
+  but this prior. `best_label` defaults to "violation" for out-of-domain text.
+- **Status**: **FALSIFIED**
+- **Edited claim**: `best_label` is not a calibrated classifier. It is only
+  meaningful when `similarity` is high enough that a specific reference actually
+  matched. Below that, it reports the library's composition.
+- **Where it went**: pinned by `test_reference_library_is_violation_weighted` so
+  the ratio cannot drift silently. Rebalancing was **not** attempted — it would
+  be a new hypothesis needing its own run.
 
 ---
 
@@ -204,7 +315,7 @@ Reproduce all of the above:
 
 ```bash
 python main.py "Power can emerge spontaneously"
-pytest tests/ -q          # 130 tests
+pytest tests/ -q          # 139 tests
 ```
 
 ---

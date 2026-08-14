@@ -7,7 +7,7 @@ premise is flagged.
 
 - **License**: CC0 1.0 Universal — public domain
 - **Dependencies**: none. Python 3.9+ stdlib only
-- **Tests**: 130, all passing
+- **Tests**: 139, all passing
 
 ```bash
 python main.py "Energy can be created from nothing"
@@ -30,8 +30,9 @@ This project is built by running the loop explicitly:
 Every superseded design is kept, not deleted. Two artifacts carry that record:
 
 - **[`FALSIFICATION_LOG.md`](FALSIFICATION_LOG.md)** — what was claimed, what
-  happened when it ran, what the claim became. Six entries so far, including one
-  claim that is **currently open and unresolved** (F-006).
+  happened when it ran, what the claim became. Nine entries, four of which
+  falsify claims made *by this project about itself* — including a prescription
+  written in the log one commit before it was disproved (F-008).
 - **[`legacy/`](legacy/)** — the superseded artifacts themselves, moved with
   `git mv` so `git log --follow` still works.
 
@@ -128,8 +129,8 @@ PhysicsGuard/
 │   ├── environment_expression_surface.py  # add-on: developmental loading
 │   └── knowledge_transmission_substrate.py # companion: content + substrate
 │
-├── benchmarks/                 # 26-case regression corpus (cases.jsonl)
-├── tests/                      # 130 tests
+├── benchmarks/                 # 26-case regression corpus + 24-row gate probe
+├── tests/                      # 139 tests
 ├── legacy/                     # superseded artifacts — see legacy/README.md
 └── FALSIFICATION_LOG.md        # the hypothesize → run → falsify record
 ```
@@ -160,7 +161,7 @@ correct physics and returns CLEAN. See **F-005**.
 ## Testing
 
 ```bash
-pytest tests/ -v            # 130 tests
+pytest tests/ -v            # 139 tests
 ruff check .
 ```
 
@@ -172,6 +173,7 @@ ruff check .
 | `test_thermodynamic_accountability.py` | 9 | TAF energy accounting |
 | `test_organizational.py` | 6 | Org constraint thresholds |
 | `test_information.py` | 4 | Information conservation laws |
+| `test_vector_gate.py` | 9 | Similarity-gate boundary + physics-free controls |
 
 The benchmark corpus is a **seed corpus, not authoritative training data**.
 Known-failure cases must stay visible rather than be silenced — see

@@ -1,0 +1,24 @@
+{"id": "probe-001", "kind": "violation", "input": "output appears with no source energy", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-002", "kind": "violation", "input": "results emerge without any data input", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-003", "kind": "violation", "input": "the apparatus yields surplus work from an empty reservoir", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-004", "kind": "violation", "input": "a sealed box keeps emitting heat forever with nothing added", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-005", "kind": "violation", "input": "the turbine returns more shaft power than the steam carries in", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-006", "kind": "violation", "input": "this converter wastes absolutely nothing during transformation", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-007", "kind": "violation", "input": "the model attains flawless accuracy on pure static", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-008", "kind": "violation", "input": "disorder in the sealed vessel drops by itself overnight", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-009", "kind": "violation", "input": "the pump moves warmth upward in temperature at zero expense", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-010", "kind": "violation", "input": "we shrank the random file past its information content", "truth": "VIOLATION", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-011", "kind": "valid", "input": "no engine can beat the carnot ceiling", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-012", "kind": "valid", "input": "nothing in a sealed vessel loses total energy", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-013", "kind": "valid", "input": "a freely coasting puck keeps moving forever absent friction", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-014", "kind": "valid", "input": "there is no way to cool a room by leaving the fridge door open", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-015", "kind": "valid", "input": "unlimited useful work is not available from a single heat bath", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-016", "kind": "valid", "input": "without an external push the disorder of the vessel will not fall", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-017", "kind": "valid", "input": "free expansion of a gas costs no work yet raises entropy", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-018", "kind": "valid", "input": "the sun delivers energy that plants store with heavy losses", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-019", "kind": "valid", "input": "warmth spreads through the bar until both ends match", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "probe-020", "kind": "valid", "input": "a battery discharges by converting stored chemistry into current", "truth": "VALID", "notes": "novel phrasing; deliberately avoids reference-library wording"}
+{"id": "control-001", "kind": "control", "input": "the meeting is scheduled for tuesday afternoon", "truth": "NO_PHYSICS_CONTENT", "notes": "physics-free sentence; must not be flagged as a violation"}
+{"id": "control-002", "kind": "control", "input": "she walked the dog around the block twice", "truth": "NO_PHYSICS_CONTENT", "notes": "physics-free sentence; must not be flagged as a violation"}
+{"id": "control-003", "kind": "control", "input": "please submit the quarterly report by friday", "truth": "NO_PHYSICS_CONTENT", "notes": "physics-free sentence; must not be flagged as a violation"}
+{"id": "control-004", "kind": "control", "input": "the recipe calls for two cups of flour", "truth": "NO_PHYSICS_CONTENT", "notes": "physics-free sentence; must not be flagged as a violation"}

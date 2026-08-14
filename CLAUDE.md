@@ -33,14 +33,16 @@ PhysicsGuard/
 ├── knowledge_transmission_substrate.py  # Companion: content + substrate transmission
 ├── benchmarks/
 │   ├── cases.jsonl                # 26-case seed corpus (not authoritative data)
+│   ├── vector_gate_probe.jsonl    # 24-row boundary corpus for the similarity gate
 │   └── README.md                  # Schema, framing warning, contribution rules
-├── tests/                         # 130 tests total
+├── tests/                         # 139 tests total
 │   ├── test_premises.py           # Core pipeline tests (53)
 │   ├── test_benchmarks.py         # Benchmark corpus regression (45)
 │   ├── test_vectorizer.py         # Vector similarity tests (13)
 │   ├── test_thermodynamic_accountability.py  # TAF tests (9)
 │   ├── test_organizational.py     # Organizational module tests (6)
-│   └── test_information.py        # Information conservation tests (4)
+│   ├── test_information.py        # Information conservation tests (4)
+│   └── test_vector_gate.py        # Similarity-gate boundary + controls (9)
 ├── legacy/                        # Superseded artifacts — do NOT treat as current
 │   ├── README.md                  # What is here and what falsified it
 │   ├── v1_specification.md        # Original README w/ inline v1 source (was README.md)
@@ -61,9 +63,10 @@ a falsified design is the evidence that constrains the next one.
 - `FALSIFICATION_LOG.md` — the hypothesize → run → result → falsified → edit loop,
   one entry per turn. Read it before proposing a simplification; several
   obvious-looking approaches are already in there with the evidence that killed
-  them. **F-006 is currently OPEN** — the vectorizer similarity gate (0.2) rejects
-  correctly-categorized rephrasings scoring 0.13–0.16. Do not retune that
-  threshold without running both the full suite and the benchmark corpus.
+  them. Four of the nine entries falsify claims this project made *about itself*.
+  **Before touching `core/vectorizer.py` or its similarity threshold, read
+  F-006 through F-009** — the gate has been measured, every alternative operating
+  point tested was worse, and the suite alone cannot detect a bad threshold.
 - `legacy/` — the artifacts themselves. Never imported, never current.
 
 When superseding something:
@@ -180,9 +183,35 @@ Severity-weighted scoring (not simple counting):
 TF-IDF vectorizer with cosine similarity against a reference library of ~60 known physics violations and valid claims. Uses word unigrams + bigrams + trigrams for phrase-level matching. Zero external dependencies.
 
 **Role in pipeline**: Integrated into `premise_parser.py` as:
-- **Fallback**: When regex patterns return `"generic"`, vector match provides the claim category
+- **Fallback**: When regex patterns return `"generic"` and similarity > 0.2, vector match provides the claim category
 - **Impossibility detection**: High similarity to violation references flags claims even without regex match
 - **Confidence boost/penalty**: Vector agreement with regex result increases confidence; disagreement decreases it
+
+**Measured reach — read before changing anything here.** The F-006 investigation
+(see `FALSIFICATION_LOG.md`, entries F-006 through F-009) established:
+
+- The vectorizer generalizes to **near-verbatim paraphrase only**. On novel
+  phrasing, true-positive and false-positive rates at the 0.2 gate are both
+  `0.00` — the gate is effectively closed, and that is the safest measured
+  setting.
+- **No threshold separates the classes.** Violation and valid similarity
+  distributions overlap almost entirely on held-out phrasing. Best achievable
+  balanced accuracy is 0.75–0.80 against a 0.50 coin flip, and every variant at
+  its own optimum flags 3–4 of 4 *physics-free* control sentences as violations.
+- Per-category thresholds were tested and are **no better** than the global gate.
+- `best_label` is not calibrated: the library is 41 violation vs 20 valid
+  entries, so out-of-domain text defaults to "violation".
+- OOV terms get a *higher* IDF than any in-vocab term while being unable to match
+  anything, so scores are deflated in proportion to phrasing novelty (86–91% of
+  query magnitude is dead weight on novel input). This is a real defect;
+  correcting it in isolation makes discrimination **worse**, so it is
+  deliberately unfixed.
+
+Do not retune the threshold, rebalance the library, or "fix" the OOV weighting
+without running `benchmarks/vector_gate_probe.jsonl` — outside of
+`tests/test_vector_gate.py`, the suite has only **3 distinct cases** that reach
+this gate, all far from the boundary, so it cannot detect a bad threshold
+(F-008).
 
 **Reference library categories**: `creation_from_nothing`, `output_without_cost`, `perfect_efficiency`, `entropy_reversal`, `infinite_claim`, `perpetual_motion`, `information_violation`, `conservation_statement`, `transfer_claim`
 
@@ -311,7 +340,7 @@ copies.
 ## Tooling
 
 Defined in `pyproject.toml`:
-- **pytest**: test discovery in `tests/`, 130 tests
+- **pytest**: test discovery in `tests/`, 139 tests
 - **ruff**: Python 3.9 target, 120 char lines, E/F/W/I rules (E701 ignored)
 - **mypy**: Python 3.9, warns on `Any` returns
 - **CI** (`.github/workflows/ci.yml`): ruff + pytest on Python 3.9, 3.11, 3.12
@@ -319,7 +348,7 @@ Defined in `pyproject.toml`:
 ## Testing
 
 ```bash
-pytest tests/ -v                                  # all 130 tests
+pytest tests/ -v                                  # all 139 tests
 pytest tests/test_premises.py -v                  # core pipeline (53)
 pytest tests/test_benchmarks.py -v                # benchmark corpus (45)
 pytest tests/test_vectorizer.py -v                # vector similarity (13)
