@@ -1,3 +1,16 @@
+> **SUPERSEDED — historical artifact, not documentation.**
+>
+> This plan was fully executed in `92cefb1`. Its "Problem" sections describe
+> behavior that no longer exists in the codebase. Its Phase 1 section is the
+> contemporaneous record of falsification **F-001** — the
+> `"Power can emerge spontaneously"` → CLEAN failure — written before the fix
+> existed.
+>
+> See [`../FALSIFICATION_LOG.md`](../FALSIFICATION_LOG.md) for what was falsified
+> and what replaced it. For the current system see [`../README.md`](../README.md).
+
+---
+
 # PhysicsGuard — Implementation Plan
 
 ## Goal

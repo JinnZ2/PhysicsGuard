@@ -52,6 +52,45 @@ Verdicts use the normalized vocabulary from `ai_interface.audit()`:
 | corpus (monoculture)  |  2 |
 | **total**             | **26** |
 
+## `vector_gate_probe.jsonl` — the boundary corpus
+
+A second, separate corpus with a different job. `cases.jsonl` pins end-to-end
+verdicts; `vector_gate_probe.jsonl` exists to constrain **one decision boundary**:
+the similarity gate in `core/vectorizer.py`.
+
+It was built during the F-006 investigation, after measuring that only **3
+distinct cases** in the then-130-test suite reached that gate — all far above it.
+The suite could not have detected a bad threshold anywhere in `0.0 – 0.345`.
+
+24 rows, three kinds:
+
+```jsonc
+{ "id": "probe-001", "kind": "violation", "input": "...", "truth": "VIOLATION", "notes": "..." }
+```
+
+| `kind` | Count | Role |
+|--------|------:|------|
+| `violation` | 10 | Real physics violations in phrasing deliberately unlike the reference library |
+| `valid` | 10 | True physics statements loaded with violation-flavored vocabulary ("nothing", "without", "free", "forever") — the hard negatives |
+| `control` | 4 | Physics-free English. **Must never be flagged.** |
+
+The controls are the load-bearing part. Under every scoring variant tested,
+3 of 4 crossed the violation line at that variant's own best threshold —
+`"she walked the dog around the block twice"` scores 0.219 against
+`creation_from_nothing`. That is what makes lowering the gate unsafe.
+
+`truth` labels are grounded in physics, independent of what PhysicsGuard
+outputs, so the corpus can falsify the tool rather than merely echo it.
+
+Enforced by `tests/test_vector_gate.py`. Run it before touching the similarity
+threshold, the reference library, or the OOV weighting:
+
+```bash
+pytest tests/test_vector_gate.py -v
+```
+
+See `FALSIFICATION_LOG.md` F-006 through F-009 for the measurements.
+
 ## Adding a case
 
 1. Pick the lowest integer suffix not already used for your domain.

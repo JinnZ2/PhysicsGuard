@@ -5,9 +5,24 @@ Lightweight TF-IDF vectorizer using only stdlib. Encodes premises as sparse
 vectors and compares them against a reference library of known physics
 violations and valid claims using cosine similarity.
 
-This provides semantic matching that catches rephrasings the regex patterns miss:
+This provides semantic matching for rephrasings close to the reference library:
 - "Power emerges spontaneously" matches near "energy created from nothing"
 - "Unlimited output from a box" matches near "infinite power from finite source"
+
+SCOPE — measured, not aspirational. This module generalizes to *near-verbatim
+paraphrase* only. On genuinely novel phrasing it does not fire, and should not
+be tuned to: violation and valid similarity distributions overlap almost
+completely there, and every operating point that catches novel violations also
+flags physics-free English ("she walked the dog around the block twice" scores
+0.219 against creation_from_nothing). See FALSIFICATION_LOG.md F-006..F-009 for
+the measurements, and benchmarks/vector_gate_probe.jsonl for the corpus that
+must be run before changing the threshold or the library.
+
+Known defect, deliberately unfixed (F-007): vectorize() gives out-of-vocabulary
+terms a HIGHER idf than any in-vocabulary term, while such terms can match no
+reference by construction. Scores are therefore deflated in proportion to
+phrasing novelty. Correcting this in isolation lowers balanced accuracy — it
+rescales every score rather than improving separation.
 
 No external dependencies — uses math, collections, and re from stdlib.
 """

@@ -13,28 +13,67 @@ PhysicsGuard is a physics-grounded logic verification system that detects corrup
 ```
 PhysicsGuard/
 ├── main.py                        # Entry point — check(), check_batch(), CLI
+├── ai_interface.py                # audit() — unified, exception-safe AI entry point
 ├── core/
-│   ├── premise_parser.py          # Pattern-based semantic claim extraction
+│   ├── premise_parser.py          # Pattern-based semantic claim extraction + dismissal layer
 │   ├── constraint_mapper.py       # Maps claims → real conservation equations
 │   ├── conservation_checker.py    # Validates constraints with actual delta math
 │   ├── flag_engine.py             # Severity-weighted scoring, Verdict/Violation dataclasses
 │   ├── vectorizer.py              # TF-IDF vectors + cosine similarity reference matching
-│   ├── contrapositive_tester.py   # Four-corner semantic validation
-│   └── conditional_verdict.py     # Scope-conditional verdict layer (v1.1)
+│   ├── contrapositive_tester.py   # Four-corner semantic validation (standalone)
+│   └── conditional_verdict.py     # Scope-conditional verdict layer (standalone)
 ├── domains/
-│   ├── organizational.py          # Org structure constraint checking (v2)
-│   └── information.py             # Information conservation (Landauer, Shannon, NFL)
-├── tests/
-│   ├── test_premises.py           # Core pipeline tests (30 cases)
-│   ├── test_vectorizer.py         # Vector similarity tests (13 cases)
-│   ├── test_organizational.py     # Organizational module tests (6 cases)
-│   └── test_information.py        # Information conservation tests (4 cases)
+│   ├── organizational.py          # Org structure constraint checking
+│   ├── information.py             # Information conservation (Landauer, Shannon, NFL)
+│   └── thermodynamic_accountability.py  # TAF energy accounting (extraction/labor claims)
+├── monoculture_detector.py        # Variance-collapse audit across 7 axes
+├── trait_waveform_validator.py    # Phase-space anti-bias framework (base module)
+├── cognition_state_surface.py     # Add-on: task-specific cognition surfaces
+├── environment_expression_surface.py    # Add-on: developmental-loading axes
+├── knowledge_transmission_substrate.py  # Companion: content + substrate transmission
+├── benchmarks/
+│   ├── cases.jsonl                # 26-case seed corpus (not authoritative data)
+│   ├── vector_gate_probe.jsonl    # 24-row boundary corpus for the similarity gate
+│   └── README.md                  # Schema, framing warning, contribution rules
+├── tests/                         # 139 tests total
+│   ├── test_premises.py           # Core pipeline tests (53)
+│   ├── test_benchmarks.py         # Benchmark corpus regression (45)
+│   ├── test_vectorizer.py         # Vector similarity tests (13)
+│   ├── test_thermodynamic_accountability.py  # TAF tests (9)
+│   ├── test_organizational.py     # Organizational module tests (6)
+│   ├── test_information.py        # Information conservation tests (4)
+│   └── test_vector_gate.py        # Similarity-gate boundary + controls (9)
+├── legacy/                        # Superseded artifacts — do NOT treat as current
+│   ├── README.md                  # What is here and what falsified it
+│   ├── v1_specification.md        # Original README w/ inline v1 source (was README.md)
+│   └── PLAN.md                    # Executed rewrite plan
+├── FALSIFICATION_LOG.md           # Claim → run → result → edited claim record
+├── .github/workflows/ci.yml       # ruff + pytest on py3.9/3.11/3.12
 ├── pyproject.toml                 # Project metadata, pytest/ruff/mypy config
-├── README.md                      # Original specification document
-├── PLAN.md                        # Architecture evolution plan
+├── README.md                      # Current user-facing documentation
 ├── LICENSE                        # CC0 1.0 Universal
 └── .gitignore
 ```
+
+## Legacy and the falsification record
+
+This repo keeps superseded work rather than deleting it. **Precedence carries** —
+a falsified design is the evidence that constrains the next one.
+
+- `FALSIFICATION_LOG.md` — the hypothesize → run → result → falsified → edit loop,
+  one entry per turn. Read it before proposing a simplification; several
+  obvious-looking approaches are already in there with the evidence that killed
+  them. Four of the nine entries falsify claims this project made *about itself*.
+  **Before touching `core/vectorizer.py` or its similarity threshold, read
+  F-006 through F-009** — the gate has been measured, every alternative operating
+  point tested was worse, and the suite alone cannot detect a bad threshold.
+- `legacy/` — the artifacts themselves. Never imported, never current.
+
+When superseding something:
+1. `git mv` it into `legacy/` (never copy-and-delete — `git log --follow` must work)
+2. Add a `FALSIFICATION_LOG.md` entry: claim, run, **verbatim** result, edited claim
+3. Add a row to the table in `legacy/README.md`
+4. Record unresolved unknowns as `OPEN` rather than omitting them
 
 ## Commands
 
@@ -72,6 +111,18 @@ result = check("Energy can be created from nothing")
 # Returns: {"verdict": "CORRUPTED", "score": 0.67, "flags": [...], ...}
 
 results = check_batch(["claim1", "claim2"])
+```
+
+Preferred entry point for AI clients — auto-routes by input shape and never
+raises (failures return `mode="error"` instead):
+
+```python
+from ai_interface import audit
+
+audit("Energy can be created from nothing")   # str  → premise
+audit(["doc 1", "doc 2", "doc 3"])            # list → corpus / monoculture
+audit({"domain": "organizational", ...})      # dict → domain module
+audit(x, mode="premise")                      # force a mode
 ```
 
 ## Architecture
@@ -132,9 +183,35 @@ Severity-weighted scoring (not simple counting):
 TF-IDF vectorizer with cosine similarity against a reference library of ~60 known physics violations and valid claims. Uses word unigrams + bigrams + trigrams for phrase-level matching. Zero external dependencies.
 
 **Role in pipeline**: Integrated into `premise_parser.py` as:
-- **Fallback**: When regex patterns return `"generic"`, vector match provides the claim category
+- **Fallback**: When regex patterns return `"generic"` and similarity > 0.2, vector match provides the claim category
 - **Impossibility detection**: High similarity to violation references flags claims even without regex match
 - **Confidence boost/penalty**: Vector agreement with regex result increases confidence; disagreement decreases it
+
+**Measured reach — read before changing anything here.** The F-006 investigation
+(see `FALSIFICATION_LOG.md`, entries F-006 through F-009) established:
+
+- The vectorizer generalizes to **near-verbatim paraphrase only**. On novel
+  phrasing, true-positive and false-positive rates at the 0.2 gate are both
+  `0.00` — the gate is effectively closed, and that is the safest measured
+  setting.
+- **No threshold separates the classes.** Violation and valid similarity
+  distributions overlap almost entirely on held-out phrasing. Best achievable
+  balanced accuracy is 0.75–0.80 against a 0.50 coin flip, and every variant at
+  its own optimum flags 3–4 of 4 *physics-free* control sentences as violations.
+- Per-category thresholds were tested and are **no better** than the global gate.
+- `best_label` is not calibrated: the library is 41 violation vs 20 valid
+  entries, so out-of-domain text defaults to "violation".
+- OOV terms get a *higher* IDF than any in-vocab term while being unable to match
+  anything, so scores are deflated in proportion to phrasing novelty (86–91% of
+  query magnitude is dead weight on novel input). This is a real defect;
+  correcting it in isolation makes discrimination **worse**, so it is
+  deliberately unfixed.
+
+Do not retune the threshold, rebalance the library, or "fix" the OOV weighting
+without running `benchmarks/vector_gate_probe.jsonl` — outside of
+`tests/test_vector_gate.py`, the suite has only **3 distinct cases** that reach
+this gate, all far from the boundary, so it cannot detect a bad threshold
+(F-008).
 
 **Reference library categories**: `creation_from_nothing`, `output_without_cost`, `perfect_efficiency`, `entropy_reversal`, `infinite_claim`, `perpetual_motion`, `information_violation`, `conservation_statement`, `transfer_claim`
 
@@ -206,10 +283,49 @@ Checks `InfoClaim` dataclass against 4 laws:
 - **Data processing inequality** — processing cannot increase information
 - **Shannon noise bound** — accuracy bounded by noise level
 
+### Thermodynamic Accountability (`domains/thermodynamic_accountability.py`)
+
+Checks `TAFClaim` dataclass — same shape as `OrgClaim` / `InfoClaim`:
+- **Energy balance** — outflow must be accounted for by inflow
+- **Friction ratio** — overhead as a fraction of useful work
+- **Distance to collapse** — 1.2 / 1.4 / 1.6 × E_in ladder
+- **Parasitic debt** — extraction without return flow
+- **Narrative cover** — justification mass vs. measured flow
+
+Anchors the `organizational.py` thresholds: enforcement / slack / cascade limits
+trace back to TAF friction-ratio and collapse-threshold physics. Also drives the
+`energy_extraction_without_return` claim pattern in the core pipeline.
+
 ### Extended Modules (standalone, not wired into main pipeline)
 
 - **Contrapositive Tester** (`core/contrapositive_tester.py`) — Four-corner semantic validation
 - **Conditional Verdict** (`core/conditional_verdict.py`) — Scope-conditional truth boundaries
+
+## Top-Level Modules
+
+Kept at the repository root because their own docstrings document the root import
+path (`from trait_waveform_validator import ...`) as the public API. That path is
+stable — do not relocate them without updating the docstrings and any downstream
+copies.
+
+- **`ai_interface.py`** — `audit(input, mode="auto")`. Auto-routes by input shape
+  (str → premise, list → corpus, dict → domain module), catches all exceptions at
+  the boundary, returns one envelope: `mode`, `verdict`, `native_verdict`, `score`,
+  `flags`, `summary`, `details`, `error`. Monoculture GREEN/YELLOW/RED is normalized
+  into CLEAN/SUSPECT/CORRUPTED with the original kept as `native_verdict`.
+- **`monoculture_detector.py`** — grades a corpus GREEN/YELLOW/RED on seven axes
+  (lexical entropy, structural diversity, causal/timescale/substrate coverage,
+  failure-mode awareness, lineage diversity). All thresholds published and
+  overridable. Distinguishes variance collapse from legitimate attractor convergence.
+- **`trait_waveform_validator.py`** — phase-space anti-bias framework. Rejects
+  scalar group comparisons as a *type* error unless all required axes are
+  specified. Plugs in via `PhysicsGuardAdapter`.
+- **`cognition_state_surface.py`** — add-on. Task-specific cognition surfaces;
+  enforces both axis and task specification.
+- **`environment_expression_surface.py`** — add-on. Developmental-loading axes, plus
+  `compare_within_vs_across_environment()` as a confounding diagnostic.
+- **`knowledge_transmission_substrate.py`** — companion. Models transmission as
+  encodable CONTENT + non-encodable developmental SUBSTRATE.
 
 ## Code Conventions
 
@@ -224,24 +340,33 @@ Checks `InfoClaim` dataclass against 4 laws:
 ## Tooling
 
 Defined in `pyproject.toml`:
-- **pytest**: test discovery in `tests/`, 55 tests
+- **pytest**: test discovery in `tests/`, 139 tests
 - **ruff**: Python 3.9 target, 120 char lines, E/F/W/I rules (E701 ignored)
 - **mypy**: Python 3.9, warns on `Any` returns
+- **CI** (`.github/workflows/ci.yml`): ruff + pytest on Python 3.9, 3.11, 3.12
 
 ## Testing
 
 ```bash
-pytest tests/ -v                      # all 55 tests
-pytest tests/test_premises.py -v      # core pipeline (30 tests)
-pytest tests/test_vectorizer.py -v    # vector similarity (13 tests)
-pytest tests/test_organizational.py   # org module (6 tests)
-pytest tests/test_information.py      # info module (4 tests)
+pytest tests/ -v                                  # all 139 tests
+pytest tests/test_premises.py -v                  # core pipeline (53)
+pytest tests/test_benchmarks.py -v                # benchmark corpus (45)
+pytest tests/test_vectorizer.py -v                # vector similarity (13)
+pytest tests/test_thermodynamic_accountability.py # TAF (9)
+pytest tests/test_organizational.py               # org module (6)
+pytest tests/test_information.py                  # info module (4)
 ```
 
 Test categories:
 - **Verdict correctness** — parametrized premises with expected verdicts
 - **Claim pattern detection** — verifies regex patterns match correctly
+- **Dismissal handling** — denied violations ("you cannot get something from nothing") return CLEAN
 - **Real constraint math** — checks that deltas are nonzero for violations, zero for valid claims
 - **Output structure** — verifies all required fields present
 - **Adversarial cases** — tricky wordings, edge cases, empty input
 - **Batch API** — `check_batch()` returns correct results
+- **Benchmark regression** — every case in `benchmarks/cases.jsonl` asserted on verdict
+  and optional `expected_pattern`
+
+`benchmarks/cases.jsonl` is a **seed corpus, not authoritative training data**.
+Known-failure cases must stay visible in it rather than be silenced.
