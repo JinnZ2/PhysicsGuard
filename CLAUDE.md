@@ -18,6 +18,7 @@ PhysicsGuard/
 │   ├── premise_parser.py          # Pattern-based semantic claim extraction + dismissal layer
 │   ├── constraint_mapper.py       # Maps claims → real conservation equations
 │   ├── conservation_checker.py    # Validates constraints with actual delta math
+│   ├── quantity_checker.py        # Units-aware known-answer checks on stated numbers (F-013)
 │   ├── flag_engine.py             # Severity-weighted scoring, Verdict/Violation dataclasses
 │   ├── vectorizer.py              # TF-IDF vectors + cosine similarity reference matching
 │   ├── contrapositive_tester.py   # Four-corner semantic validation (standalone)
@@ -35,14 +36,15 @@ PhysicsGuard/
 │   ├── cases.jsonl                # 26-case seed corpus (not authoritative data)
 │   ├── vector_gate_probe.jsonl    # 24-row boundary corpus for the similarity gate
 │   └── README.md                  # Schema, framing warning, contribution rules
-├── tests/                         # 139 tests total
+├── tests/                         # 174 tests total
 │   ├── test_premises.py           # Core pipeline tests (53)
 │   ├── test_benchmarks.py         # Benchmark corpus regression (45)
 │   ├── test_vectorizer.py         # Vector similarity tests (13)
 │   ├── test_thermodynamic_accountability.py  # TAF tests (9)
 │   ├── test_organizational.py     # Organizational module tests (6)
 │   ├── test_information.py        # Information conservation tests (4)
-│   └── test_vector_gate.py        # Similarity-gate boundary + controls (9)
+│   ├── test_vector_gate.py        # Similarity-gate boundary + controls (9)
+│   └── test_quantity_checker.py   # Known-answer physics, both directions (35)
 ├── legacy/                        # Superseded artifacts — do NOT treat as current
 │   ├── README.md                  # What is here and what falsified it
 │   ├── v1_specification.md        # Original README w/ inline v1 source (was README.md)
@@ -233,6 +235,11 @@ result.valid_score      # 0.08
 | `CLEAN` | 0.0 | No violations |
 | `SUSPECT` | < 0.3 | Minor/uncertain violation |
 | `CORRUPTED` | >= 0.3 | Premise fails physics |
+| `OUT_OF_SCOPE` | 0.0 | Nothing was compared — no law applies to what the premise states. Not a pass (added 2026-10-27, F-010) |
+
+Note 2026-10-27 (F-016): SUSPECT reports *size* (relative excess), not
+uncertainty. A stated 120% efficiency is a certain violation that reads
+SUSPECT 0.25; read certainty from `confidence` and `quantity_checks.state`.
 
 ### Output Shape
 
@@ -254,6 +261,10 @@ result.valid_score      # 0.08
     ],
     "applicable_laws": ["first_law_thermodynamics", "second_law_thermodynamics"],
     "confidence": 0.95,               # how sure we are
+    "quantity_checks": {              # added 2026-10-27 (F-013)
+        "state": "VIOLATION",         # VIOLATION | CONSISTENT | UNRESOLVED | NOT_APPLICABLE
+        "findings": [...]             # check, limit, claimed, formula, source spans
+    },
     "audit": {                         # full trace
         "claim_pattern": "creation_from_nothing",
         "chain": [...],
@@ -340,7 +351,7 @@ copies.
 ## Tooling
 
 Defined in `pyproject.toml`:
-- **pytest**: test discovery in `tests/`, 139 tests
+- **pytest**: test discovery in `tests/`, 174 tests
 - **ruff**: Python 3.9 target, 120 char lines, E/F/W/I rules (E701 ignored)
 - **mypy**: Python 3.9, warns on `Any` returns
 - **CI** (`.github/workflows/ci.yml`): ruff + pytest on Python 3.9, 3.11, 3.12
@@ -348,7 +359,7 @@ Defined in `pyproject.toml`:
 ## Testing
 
 ```bash
-pytest tests/ -v                                  # all 139 tests
+pytest tests/ -v                                  # all 174 tests
 pytest tests/test_premises.py -v                  # core pipeline (53)
 pytest tests/test_benchmarks.py -v                # benchmark corpus (45)
 pytest tests/test_vectorizer.py -v                # vector similarity (13)

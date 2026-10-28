@@ -33,6 +33,7 @@ def check_conservation(constraints: list) -> list:
             "lhs": lhs,
             "rhs": rhs,
             "detail": _describe(c, passed, delta),
+            "default": c.get("default", False),
         })
     return results
 
