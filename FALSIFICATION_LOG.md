@@ -296,6 +296,179 @@ them as claims.
   the ratio cannot drift silently. Rebalancing was **not** attempted — it would
   be a new hypothesis needing its own run.
 
+## F-010 — CLEAN means "physically consistent"
+
+- **Claim** (`core/flag_engine.py`, `_summarize`): a CLEAN verdict reports
+  "No conservation violations detected. Premise is physically consistent."
+- **Run** (at `7ab30ff`): `check("The quarterly report is due Friday")`
+- **Result**: `CLEAN 0.0 No conservation violations detected. Premise is
+  physically consistent. ['first_law_thermodynamics', 'second_law_thermodynamics']`.
+  The same verdict and sentence came back for every one of the four
+  physics-free controls in `benchmarks/vector_gate_probe.jsonl`. "No law
+  applied" and "a law applied and held" were one output. `_empty_verdict`
+  (no constraints at all) also returned `status="CLEAN"`; only its summary
+  string differed.
+- **Status**: **FALSIFIED**
+- **Edited claim**: a premise where nothing was compared reads
+  `OUT_OF_SCOPE`, score 0.0, summary "no conservation law applies to anything
+  this premise states; nothing was compared. This is not a pass."
+  (READ_ME_THIS_WAY §4: keep found, out of scope and unresolved apart.)
+  `ai_interface` maps it to itself; it is neither CLEAN nor ERROR.
+  A generic-pattern dismissal ("You cannot get something from nothing") had
+  been reaching CLEAN only through the default; every `DISMISSAL_PATTERN`
+  names a physics object, so it is now recorded as `conservation_affirmation`.
+- **Re-run of earlier entries**: of 67 distinct premises in the benchmark
+  corpus, the gate probe, `tests/test_premises.py` and 11 real-physics
+  probes, 34 changed verdict. 25 went CLEAN → OUT_OF_SCOPE: all 10 probe
+  violations, all 4 controls, 6 of 10 probe valid claims, and 5 others. This
+  includes the two F-006 inputs, which now read OUT_OF_SCOPE where F-006
+  recorded CLEAN. That is the same non-detection, now labelled as one. The
+  six claims under "Claims that still hold" re-run unchanged.
+- **Where it went**: `core/flag_engine.py` (`_empty_verdict`,
+  `OUT_OF_SCOPE_SUMMARY`), `core/constraint_mapper.py` (`_generic_balance`),
+  `ai_interface.py`. Three tests carry a dated note and their original
+  assertion: `test_balanced_exchange_is_clean`, `test_empty_premise` and
+  `test_numeric_premise`.
+
+## F-011 — F-002 was repaired on one side only
+
+- **Claim** (F-002, edited claim): "lhs and rhs must genuinely differ when
+  physics is violated."
+- **Run** (at `7ab30ff`):
+  `map_to_constraints(parse_premise("The quarterly report is due Friday"))`
+- **Result**: `[{'law': 'first_law_thermodynamics', 'lhs': 1.0, 'rhs': 1.0,
+  ... 'reason': 'Energy balance appears conserved'}, {'law':
+  'second_law_thermodynamics', 'lhs': 1.0, 'rhs': 1.0, ... 'reason': 'Entropy
+  production appears accounted for'}]`. The default branches of `_first_law`,
+  `_second_law`, `_mass_conservation`, `_information_conservation` and
+  `_generic_balance` set `lhs = rhs` by construction. This is F-002's defect on
+  the passing side: the equation cannot fail, so passing it reports nothing.
+  These constraints also entered the mean severity, which diluted every real
+  violation they were averaged with.
+- **Status**: **FALSIFIED** (as a claim about the whole pipeline)
+- **Edited claim**: default constraints are marked `"default": True`. They
+  stay in the audit trail, with `"default"` on each row, and are excluded from
+  the score. A premise whose only constraints are defaults reads
+  `OUT_OF_SCOPE` (F-010). The branches themselves are unchanged and kept for
+  comparison.
+- **Where it went**: `core/constraint_mapper.py`,
+  `core/conservation_checker.py`, `core/flag_engine.py`.
+
+## F-012 — `_stem_match` types claims by domain vocabulary
+
+- **Claim** (`core/premise_parser.py`): stem matching "in either direction"
+  finds domain keywords.
+- **Run** (at `7ab30ff`): `_stem_match('the', 'thermal')`,
+  `parse_premise('she walked the dog')['type']`
+- **Result**: `True`, `thermodynamic`. The reverse direction
+  (`keyword.startswith(word)`) accepts any 3-letter word that prefixes a
+  keyword. "the" prefixes `thermal` and `thermodynamic`, so every sentence
+  containing "the" was typed thermodynamic and received first- and
+  second-law default constraints. `keywords` for "The quarterly report is due
+  Friday" were `['thermal', 'thermodynamic']`.
+- **Status**: **FALSIFIED**
+- **Edited claim**: a word must be at least 4 characters to count as the
+  prefix of a longer keyword. The forward direction is unchanged. "The
+  thermal load is high" still types thermodynamic, and "The quarterly
+  report…" types `unknown`. The original line is kept as a comment.
+- **Where it went**: `core/premise_parser.py`;
+  `tests/test_quantity_checker.py::test_the_is_not_thermodynamic`.
+
+## F-013 — The pipeline checks the numbers a premise states
+
+- **Claim** (implicit in `README.md`: "translating natural language claims
+  into physical constraint equations"; `_extract_magnitude`): numeric claims
+  are checked.
+- **Run** (at `7ab30ff`): the 11 premises in the table below.
+- **Result**: all 11 returned `CLEAN 0.0 … Premise is physically consistent.`
+  `_extract_magnitude` keeps the numbers, discards their units, and the
+  mapper `sum()`s them into one magnitude. 100 W + 150 W becomes 250. No
+  constraint ever compares two stated quantities.
+
+  | Premise | Physics | at `7ab30ff` | now |
+  |---|---|---|---|
+  | The motor is 120% efficient | η ≤ 1 | CLEAN | SUSPECT 0.25 (VIOLATION) |
+  | A heat engine running between 300 K and 600 K achieves 70% efficiency | Carnot 0.5 | CLEAN | SUSPECT 0.29 (VIOLATION) |
+  | …achieves 40% efficiency | Carnot 0.5 | CLEAN | CLEAN (CONSISTENT) |
+  | The heat pump has a COP of 12 between 0 C outdoors and 35 C indoors | COP ≤ 8.80 | CLEAN | CORRUPTED 0.35 |
+  | The solar panel converts 1000 W/m2 of sunlight into 1200 W/m2 of electricity | out ≤ in | CLEAN | SUSPECT 0.25 |
+  | A 1 kg ball dropped from 10 m hits the ground with 500 J of kinetic energy | mgh = 98.07 J | CLEAN | CORRUPTED 0.62 |
+  | The battery stores 10 kWh and delivers 15 kWh per charge | out ≤ in | CLEAN | CORRUPTED 0.40 |
+  | The generator is 95% efficient | η ≤ 1 | CLEAN | CLEAN (CONSISTENT, first law only) |
+  | A 100 W motor delivers 150 W of mechanical power | roles not stated | CLEAN | OUT_OF_SCOPE (UNRESOLVED) |
+  | The quarterly report is due Friday | none | CLEAN | OUT_OF_SCOPE |
+  | Water flows uphill on its own | see note | CLEAN | OUT_OF_SCOPE |
+
+- **Status**: **FALSIFIED**
+- **Edited claim**: `core/quantity_checker.py` extracts every number that
+  carries a recognised unit and converts it to SI. Each quantity keeps its
+  source span. Five known-answer checks run on them:
+  - Q1: η ≤ 1.
+  - Q2: η ≤ 1 − Tc/Th.
+  - Q3: COP ≤ Th/(Th−Tc) for a heat pump, Tc/(Th−Tc) for a refrigerator.
+  - Q4: output ≤ input for the same dimension.
+  - Q5: KE ≤ mgh and v ≤ √(2gh).
+
+  Each check returns VIOLATION, CONSISTENT or UNRESOLVED, and nothing when it
+  does not apply. UNRESOLVED means roles were not stated, e.g. whether a motor
+  rating is input or output. It enters no score in either direction. The
+  output gains `quantity_checks: {state, findings}`. Limits are upper bounds
+  only: CONSISTENT means consistent with that law, not shown achievable.
+- **Note on the last row** (specimen): "water flows uphill on its own" is not
+  flagged, and that is the reading this module stands by. Capillary rise and
+  siphons make water rise without a pump. No limit applies until geometry and
+  energy source are stated.
+- **Where it went**: `core/quantity_checker.py`, `main.py`,
+  `tests/test_quantity_checker.py` (16 known-answer cases, both directions
+  per check).
+
+## F-014 — `perfect_efficiency` compares against the Carnot limit
+
+- **Claim** (`core/constraint_mapper.py`, `perfect_efficiency`):
+  `"rhs": 0.99,  # maximum physically possible (Carnot limit)`.
+- **Run**: read the constant; check the claim against two premises.
+- **Result**: 0.99 is a constant with no temperatures behind it, and the
+  Carnot limit is `1 − Tc/Th`. For 300 K / 600 K it is 0.50, so a 0.99
+  ceiling passes everything between 0.50 and 0.99. The pattern also treats
+  any 100% claim as a second-law violation. Electrical-to-heat conversion in
+  a resistive heater is ~100% efficient and breaks no law. The second-law
+  bound applies to heat → work, not to every conversion.
+- **Status**: **OPEN**. The constant is left as it is; Q2 in F-013 computes
+  the real Carnot limit whenever two temperatures and "engine"/"turbine" are
+  stated. Deciding what the pattern should do without temperatures is a new
+  hypothesis that needs its own run.
+
+## F-015 — Adding a true statement lowers a false one's score
+
+- **Claim** (F-003, edited claim): score = mean severity across constraints.
+- **Run** (during the F-013 build, before this entry's change):
+  `check("This device is 100% efficient with no loss")` with Q1's passing
+  finding (100% ≤ 1, first law) entered into the mean.
+- **Result**: `SUSPECT` where `benchmarks/cases.jsonl` physics-005 expects
+  `CORRUPTED`. A correct first-law check was averaged against the second-law
+  violation and pulled it below 0.3. Any mean over pass/fail results has this
+  property. F-011's default constraints were doing the same thing silently on
+  every premise.
+- **Status**: **OPEN** for the mean itself. Narrowed for the two known
+  sources: defaults are excluded (F-011), and passing quantity checks are
+  scored only when nothing else was checked.
+- **Edited claim**: a pass is evidence for the premise when it is the only
+  evidence. It is not a discount on a violation found elsewhere.
+- **Where it went**: `core/flag_engine.py`;
+  `test_passing_quantity_does_not_dilute_a_violation`.
+
+## F-016 — SUSPECT means "minor or uncertain"
+
+- **Claim** (`CLAUDE.md` verdict table): SUSPECT = "Minor/uncertain violation".
+- **Run**: `check("The motor is 120% efficient")` after F-013.
+- **Result**: `SUSPECT 0.25`, `quantity_checks.state = VIOLATION`,
+  confidence 0.9. The violation is certain: the efficiency is stated and
+  exceeds 1. SUSPECT here reports size, since severity measures the relative
+  excess (0.2 / 1.2) and not certainty. One word carries two quantities.
+- **Status**: **OPEN**. No threshold was changed (F-003's history applies).
+  Certainty is read from `confidence` and `quantity_checks.state`, size from
+  `score`. Splitting the verdict word is a new hypothesis.
+
 ---
 
 ## Claims that still hold
@@ -310,12 +483,14 @@ Re-run at each pipeline change. Currently passing.
 | Valid transfers stay clean | `Heat flows from hot to cold` | `CLEAN`, `transfer_claim` |
 | Extraction accounting works | `The company extracts value from workers without returning compensation` | `CORRUPTED 0.67` |
 | Near-paraphrase recall | `heat flows from hot to cold naturally` | sim 0.892 |
+| Stated numbers are compared (F-013) | `A heat engine running between 300 K and 600 K achieves 70% efficiency` | `SUSPECT 0.29`, `carnot_engine` VIOLATION, limit 0.5 |
+| Nothing compared is not a pass (F-010) | `The quarterly report is due Friday` | `OUT_OF_SCOPE 0.0` |
 
 Reproduce all of the above:
 
 ```bash
 python main.py "Power can emerge spontaneously"
-pytest tests/ -q          # 139 tests
+pytest tests/ -q          # 174 tests (139 before 2026-10-27)
 ```
 
 ---
