@@ -10,7 +10,7 @@ premise is flagged.
 
 - **License**: CC0 1.0 Universal — public domain
 - **Dependencies**: none. Python 3.9+ stdlib only
-- **Tests**: 139, all passing
+- **Tests**: 174, all passing
 
 ```bash
 python main.py "Energy can be created from nothing"
@@ -100,6 +100,11 @@ Returns the same envelope regardless of route: `mode`, `verdict`,
 | `CLEAN` | 0.0 | No violations |
 | `SUSPECT` | < 0.3 | Minor or uncertain violation |
 | `CORRUPTED` | >= 0.3 | Premise fails physics |
+| `OUT_OF_SCOPE` | 0.0 | Nothing was compared — no law applies to what the premise states. Not a pass (added 2026-10-27, F-010) |
+
+Note 2026-10-27 (F-016): SUSPECT reports *size* (relative excess), not
+uncertainty. A stated 120% efficiency is a certain violation that reads
+SUSPECT 0.25; read certainty from `confidence` and `quantity_checks.state`.
 
 Score is severity-weighted, not a violation count — see **F-003** in the log for
 why the original count ratio was replaced, and why the threshold moved from 0.5.
@@ -115,6 +120,7 @@ PhysicsGuard/
 │   ├── premise_parser.py       # regex claim patterns + dismissal detection
 │   ├── constraint_mapper.py    # claims → conservation equations
 │   ├── conservation_checker.py # delta math + severity scoring
+│   ├── quantity_checker.py     # units + first/second-law limits on stated numbers
 │   ├── flag_engine.py          # severity-weighted verdicts, audit trail
 │   ├── vectorizer.py           # TF-IDF fallback for rephrasings
 │   ├── contrapositive_tester.py  # four-corner validation (standalone)
@@ -133,7 +139,7 @@ PhysicsGuard/
 │   └── knowledge_transmission_substrate.py # companion: content + substrate
 │
 ├── benchmarks/                 # 26-case regression corpus + 24-row gate probe
-├── tests/                      # 139 tests
+├── tests/                      # 174 tests
 ├── legacy/                     # superseded artifacts — see legacy/README.md
 └── FALSIFICATION_LOG.md        # the hypothesize → run → falsify record
 ```
@@ -164,7 +170,7 @@ correct physics and returns CLEAN. See **F-005**.
 ## Testing
 
 ```bash
-pytest tests/ -v            # 139 tests
+pytest tests/ -v            # 174 tests
 ruff check .
 ```
 

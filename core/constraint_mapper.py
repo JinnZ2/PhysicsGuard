@@ -193,6 +193,7 @@ def _first_law(parsed):
         "rhs": mag,
         "tolerance": 0.01,
         "reason": "Energy balance appears conserved",
+        "default": True,  # lhs == rhs by construction; nothing was compared (F-011)
     }
 
 
@@ -220,6 +221,7 @@ def _second_law(parsed):
         "rhs": 1.0,
         "tolerance": 0.0,
         "reason": "Entropy production appears accounted for",
+        "default": True,  # lhs == rhs by construction; nothing was compared (F-011)
     }
 
 
@@ -252,6 +254,7 @@ def _mass_conservation(parsed):
         "rhs": mag,
         "tolerance": 0.01,
         "reason": "Mass balance appears conserved",
+        "default": True,  # lhs == rhs by construction; nothing was compared (F-011)
     }
 
 
@@ -276,11 +279,26 @@ def _information_conservation(parsed):
         "rhs": mag,
         "tolerance": 0.01,
         "reason": "Information flow appears balanced",
+        "default": True,  # lhs == rhs by construction; nothing was compared (F-011)
     }
 
 
 def _generic_balance(parsed):
     """Fallback: general conservation check based on claim structure."""
+    # Note 2026-10-27 (F-010): a dismissal ("you cannot get something from
+    # nothing") that matched no violation pattern used to reach CLEAN only
+    # through the lhs == rhs default below. Every DISMISSAL_PATTERN names a
+    # physics object, so a generic-pattern dismissal is an affirmation of
+    # conservation and is recorded as one rather than as a default.
+    if parsed.get("is_dismissal") and not parsed["is_impossibility_claim"]:
+        return {
+            "law": "conservation_affirmation",
+            "lhs": 1.0,
+            "rhs": 1.0,
+            "tolerance": 0.01,
+            "reason": "Premise denies a conservation violation -- consistent with physics",
+        }
+
     if parsed["is_impossibility_claim"]:
         return {
             "law": "generic_conservation",
@@ -305,4 +323,5 @@ def _generic_balance(parsed):
         "rhs": 1.0,
         "tolerance": 0.1,
         "reason": "No conservation violation detected in claim structure",
+        "default": True,  # lhs == rhs by construction; nothing was compared (F-011)
     }

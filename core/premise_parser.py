@@ -182,7 +182,14 @@ def _tokenize(text):
 
 def _stem_match(word, keyword):
     """Check if word and keyword share a stem (prefix match in either direction)."""
-    return len(word) >= 3 and len(keyword) >= 3 and (word.startswith(keyword) or keyword.startswith(word))
+    # Note 2026-10-27 (F-012): the reverse direction (keyword.startswith(word))
+    # matched "the" to "thermal"/"thermodynamic", typing any sentence that
+    # contains "the" as thermodynamic. A word must now be >= 4 characters to
+    # count as a prefix of a longer keyword. Original line kept for comparison:
+    #   return len(word) >= 3 and len(keyword) >= 3 and (word.startswith(keyword) or keyword.startswith(word))
+    if len(word) < 3 or len(keyword) < 3:
+        return False
+    return word.startswith(keyword) or (len(word) >= 4 and keyword.startswith(word))
 
 
 # -- Public API ----------------------------------------------------------------

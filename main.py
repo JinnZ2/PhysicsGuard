@@ -11,6 +11,9 @@ from core.conservation_checker import check_conservation
 from core.constraint_mapper import map_to_constraints
 from core.flag_engine import score_and_flag
 from core.premise_parser import parse_premise
+from core.quantity_checker import check_quantities
+from core.quantity_checker import overall as quantity_overall
+from core.quantity_checker import to_results as quantity_results
 
 
 def check(premise: str) -> dict:
@@ -24,7 +27,16 @@ def check(premise: str) -> dict:
     parsed = parse_premise(premise)
     constraints = map_to_constraints(parsed)
     results = check_conservation(constraints)
-    return score_and_flag(results, parsed, constraints)
+    # Note 2026-10-27 (F-013): stated quantities with units are now compared
+    # against first/second-law limits. UNRESOLVED findings enter no score.
+    findings = check_quantities(premise)
+    results = results + quantity_results(findings)
+    verdict = score_and_flag(results, parsed, constraints)
+    verdict["quantity_checks"] = {
+        "state": quantity_overall(findings),
+        "findings": [f.to_dict() for f in findings],
+    }
+    return verdict
 
 
 def check_batch(premises: list) -> list:

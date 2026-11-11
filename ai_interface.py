@@ -23,7 +23,7 @@ single normalized JSON schema regardless of which pipeline ran.
         "mode":           "premise" | "batch" | "corpus" |
                           "organizational" | "information" |
                           "thermodynamic" | "error",
-        "verdict":        "CLEAN" | "SUSPECT" | "CORRUPTED" | "ERROR",
+        "verdict":        "CLEAN" | "SUSPECT" | "CORRUPTED" | "OUT_OF_SCOPE" | "ERROR",
         "native_verdict": original module-specific verdict string,
         "score":          float in [0, 1] (higher = worse),
         "flags":          list of flag strings,
@@ -55,6 +55,7 @@ _NATIVE_TO_NORMAL = {
     "CLEAN":     "CLEAN",
     "SUSPECT":   "SUSPECT",
     "CORRUPTED": "CORRUPTED",
+    "OUT_OF_SCOPE": "OUT_OF_SCOPE",  # Note 2026-10-27 (F-010): not a pass, not an error
     "GREEN":     "CLEAN",
     "YELLOW":    "SUSPECT",
     "RED":       "CORRUPTED",

@@ -62,12 +62,28 @@ def score_and_flag(results: list, parsed: dict = None, constraints: list = None)
     Uses severity-weighted scoring: a single extreme violation (severity=1.0)
     matters more than several minor ones.
     """
+    # Note 2026-10-27 (F-010, F-011): constraints marked "default" have
+    # lhs == rhs by construction -- nothing was compared. They used to enter
+    # the mean (diluting real violations) and, when they were the only
+    # constraints, produced CLEAN "physically consistent" for text no law
+    # applies to. They are now kept in the audit trail but excluded from the
+    # score; a premise with no non-default result reads OUT_OF_SCOPE.
+    all_results = results
+    results = [r for r in results if not r.get("default")]
     total = len(results)
     if total == 0:
-        return _empty_verdict(parsed)
+        return _empty_verdict(parsed, all_results, constraints)
+
+    # Note 2026-10-27 (F-015): a passing quantity check is evidence for the
+    # premise only when nothing else was checked. Averaged against a violation
+    # elsewhere it lowers that violation's score -- adding a true statement to
+    # a false one made the whole read cleaner. Passing quantity checks are
+    # therefore kept in the audit but scored only when they are all there is.
+    scored = [r for r in results if not (r.get("quantity_check") and r["passed"])] or results
+    total = len(scored)
 
     failed = [r for r in results if not r["passed"]]
-    severities = [r.get("severity", 1.0 if not r["passed"] else 0.0) for r in results]
+    severities = [r.get("severity", 1.0 if not r["passed"] else 0.0) for r in scored]
 
     # Severity-weighted score: average of all severities
     score = sum(severities) / total
@@ -99,7 +115,7 @@ def score_and_flag(results: list, parsed: dict = None, constraints: list = None)
         applicable_laws=[r["law"] for r in results],
         confidence=confidence,
         summary=_summarize(violations, status, score),
-        audit=_build_audit(parsed, constraints, results, status, score),
+        audit=_build_audit(parsed, constraints, all_results, status, score),
     )
 
     return verdict.to_dict()
@@ -149,6 +165,12 @@ def _compute_confidence(parsed, results):
         elif sim < 0.1 and base > 0.5:
             base = max(base - 0.15, 0.3)
 
+    # Note 2026-10-27 (F-013): a result computed from stated quantities with
+    # units (core/quantity_checker.py) is a measured comparison, not a pattern
+    # guess. Its uncertainty is role assignment, which is stated per check.
+    if any(r.get("quantity_check") for r in results):
+        base = max(base, 0.9)
+
     return base
 
 
@@ -169,7 +191,9 @@ def _build_audit(parsed, constraints, results, status, score):
         return {}
 
     trail = []
-    for c, r in zip(constraints, results):
+    # quantity-check results have no constraint dict; pair only the mapped ones
+    mapped = [r for r in results if not r.get("quantity_check")]
+    for c, r in zip(constraints, mapped):
         trail.append({
             "law": c["law"],
             "premise_raw": parsed.get("raw", ""),
@@ -184,7 +208,14 @@ def _build_audit(parsed, constraints, results, status, score):
             "detail": r["detail"],
             "reason": c.get("reason", ""),
             "fix_hint": _hint(r),
+            "default": r.get("default", False),
         })
+    for r in results:
+        if r.get("quantity_check"):
+            trail.append({"law": r["law"], "lhs": r["lhs"], "rhs": r["rhs"],
+                          "delta": r["delta"], "passed": r["passed"],
+                          "severity": r.get("severity", 0.0), "detail": r["detail"],
+                          "quantity_check": True, "default": False})
 
     return {
         "verdict": status,
@@ -201,15 +232,32 @@ def _build_audit(parsed, constraints, results, status, score):
     }
 
 
-def _empty_verdict(parsed):
-    """Return a verdict when no constraints were generated."""
+def _empty_verdict(parsed, all_results=None, constraints=None):
+    """Return a verdict when nothing was actually compared.
+
+    Note 2026-10-27 (F-010): this used to return status CLEAN. "No law applied"
+    and "a law applied and held" are different outcomes (READ_ME_THIS_WAY s.4:
+    keep found, out of scope and unresolved apart), so it now returns
+    OUT_OF_SCOPE with score 0.0. Original status line kept for comparison:
+        status="CLEAN",
+    """
+    audit = {}
+    if parsed and constraints:
+        audit = _build_audit(parsed, constraints, all_results or [], "OUT_OF_SCOPE", 0.0)
+        audit["summary"] = OUT_OF_SCOPE_SUMMARY
     return Verdict(
         premise=parsed["raw"] if parsed else "",
-        status="CLEAN",
+        status="OUT_OF_SCOPE",
         score=0.0,
         violations=[],
         applicable_laws=[],
         confidence=0.3,
-        summary="No applicable conservation laws identified for this premise.",
-        audit={},
+        summary=OUT_OF_SCOPE_SUMMARY,
+        audit=audit,
     ).to_dict()
+
+
+OUT_OF_SCOPE_SUMMARY = (
+    "OUT_OF_SCOPE: no conservation law applies to anything this premise states; "
+    "nothing was compared. This is not a pass."
+)

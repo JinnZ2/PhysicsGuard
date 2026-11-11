@@ -128,8 +128,13 @@ def test_extraction_without_return_is_corrupted(premise):
 
 
 def test_balanced_exchange_is_clean():
+    # Note 2026-10-27 (F-010/F-011): this read CLEAN only through a default
+    # constraint with lhs == rhs by construction; no law was compared. It now
+    # reads OUT_OF_SCOPE. The name is kept; the original assertion was:
+    #     assert result["verdict"] == "CLEAN"
     result = check("Workers produce value and receive fair compensation")
-    assert result["verdict"] == "CLEAN"
+    assert result["verdict"] == "OUT_OF_SCOPE"
+    assert result["flags"] == []
 
 
 # -- Real constraint math tests ------------------------------------------------
@@ -242,11 +247,11 @@ def test_dismissal_flag_not_set_for_violations():
 
 def test_empty_premise():
     result = check("")
-    assert result["verdict"] in ("CLEAN", "SUSPECT", "CORRUPTED")
+    assert result["verdict"] in ("CLEAN", "SUSPECT", "CORRUPTED", "OUT_OF_SCOPE")  # Note 2026-10-27: F-010
     assert 0.0 <= result["score"] <= 1.0
 
 
 def test_numeric_premise():
     """Numbers in premises shouldn't crash the system."""
     result = check("In 2024, we produced 500 kg of material with 100 joules")
-    assert result["verdict"] in ("CLEAN", "SUSPECT", "CORRUPTED")
+    assert result["verdict"] in ("CLEAN", "SUSPECT", "CORRUPTED", "OUT_OF_SCOPE")  # Note 2026-10-27: F-010
